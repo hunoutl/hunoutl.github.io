@@ -108,7 +108,6 @@
 
   function onScroll() {
     currentFloorId = currentFloorFromScroll();
-    document.body.classList.toggle("at-hero", currentFloorId === "hero");
     updateSpeculation();
     syncMirrorFrameScroll();
     updateFallbackLinks();
@@ -204,24 +203,65 @@
   const DRAG_MOTION_PX = 8;
   let hadDragMotion = false;
 
+  // Sur tactile, les bords de l'écran sont réservés au geste natif de
+  // retour arrière (back-swipe) des navigateurs mobiles modernes : on
+  // n'y démarre jamais notre propre drag, seul le centre de l'écran le
+  // déclenche (c'est aussi le geste le plus naturel au pouce).
+  const TOUCH_EDGE_RATIO = 0.12;
+
+  // Sur tactile, on ne sait pas d'entrée si le geste est un swipe
+  // horizontal (bascule de site), un scroll vertical, ou le début d'une
+  // sélection de texte (appui long) : tant que l'intention n'est pas
+  // tranchée (DIRECTION_LOCK_PX franchi dans un sens ou l'autre), on ne
+  // touche à rien — ni preventDefault, ni classe "dragging" — pour que
+  // le navigateur garde la main sur le scroll/la sélection native. La
+  // souris, elle, n'a pas cette ambiguïté : intention résolue tout de
+  // suite.
+  const DIRECTION_LOCK_PX = 10;
+  let startY = 0;
+  let intentResolved = false;
+
   function onPointerDown(e) {
     if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest(TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    if (e.pointerType === "touch") {
+      const edge = window.innerWidth * TOUCH_EDGE_RATIO;
+      if (e.clientX < edge || e.clientX > window.innerWidth - edge) return;
+    }
     dragging = true;
     committed = false;
     hadDragMotion = false;
+    intentResolved = e.pointerType !== "touch"; // souris : pas d'ambiguïté à lever
     pointerId = e.pointerId;
     startX = e.clientX;
+    startY = e.clientY;
     currentDx = 0;
     document.body.classList.remove("settling");
   }
 
   function onPointerMove(e) {
     if (!dragging || e.pointerId !== pointerId) return;
-    currentDx = e.clientX - startX;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (!intentResolved) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > DIRECTION_LOCK_PX) {
+        // Scroll vertical (ou sélection) : on lâche complètement ce
+        // geste, le navigateur reprend la main nativement.
+        dragging = false;
+        return;
+      }
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > DIRECTION_LOCK_PX) {
+        intentResolved = true;
+        document.body.classList.add("dragging");
+      } else {
+        return; // pas assez de mouvement pour trancher
+      }
+    }
+
+    currentDx = dx;
     if (Math.abs(currentDx) > DRAG_MOTION_PX) hadDragMotion = true;
     e.preventDefault();
-    document.body.classList.add("dragging");
     if (progressTowardNeighbor(currentDx) > 0) {
       setLayers(currentDx);
     } else {
@@ -234,7 +274,7 @@
     dragging = false;
     document.body.classList.remove("dragging");
     const threshold = window.innerWidth * DRAG_THRESHOLD_RATIO;
-    if (progressTowardNeighbor(currentDx) > threshold) {
+    if (intentResolved && progressTowardNeighbor(currentDx) > threshold) {
       committed = true;
       settleCommitted();
     } else {

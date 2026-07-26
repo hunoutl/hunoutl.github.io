@@ -249,47 +249,18 @@ h2 {
   opacity: 1;
 }
 
-/* Indice de glissement, visible seulement sur le 1er étage (hero) : au
-   body.at-hero (posé par drag-swipe.js selon l'étage courant). */
-.drag-hint {
-  position: fixed;
-  bottom: 1.4rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  font-family: inherit;
-  color: var(--muted);
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
-}
-
-body.at-hero .drag-hint {
-  opacity: 0.7;
-}
-
-.drag-hint-arrow {
+.mirror-hint-arrow {
   display: inline-block;
-  animation: drag-hint-bounce 1.6s ease-in-out infinite;
+  transition: transform 0.2s ease;
 }
 
-@keyframes drag-hint-bounce {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(6px);
-  }
+.mirror-hint:hover .mirror-hint-arrow {
+  transform: translateX(3px);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .drag-hint-arrow {
-    animation: none;
+  .mirror-hint:hover .mirror-hint-arrow {
+    transform: none;
   }
 }
 
