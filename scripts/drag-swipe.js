@@ -10,7 +10,7 @@
 // n'est déclenchée qu'une fois l'iframe déjà en pleine couverture de
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
-  const MIRROR_ORIGIN = "http://localhost:8811"; // TEST LOCAL — remettre "https://hunoutl.gitlab.io" avant déploiement
+  const MIRROR_ORIGIN = "https://hunoutl.gitlab.io";
   const MIRROR_CSS_URL = `${MIRROR_ORIGIN}/styles/facade.css`;
   const MIRROR_JS_CONTENT_URL = `${MIRROR_ORIGIN}/scripts/content.js`;
   const MIRROR_JS_DRAG_URL = `${MIRROR_ORIGIN}/scripts/drag-swipe.js`;
