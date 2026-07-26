@@ -32,7 +32,12 @@ body {
   color: var(--ink);
   font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
   line-height: 1.6;
-  touch-action: pan-y;
+  /* none plutôt que pan-y : pan-y laisse le navigateur prendre la main
+     sur le scroll natif dès le moindre micro-mouvement vertical, sans
+     repasser par notre JS — ce qui "mangeait" le geste de swipe à un
+     doigt (cf. drag-swipe.js). Avec none, tout passe par notre JS, qui
+     réimplémente lui-même le scroll vertical. */
+  touch-action: none;
   overscroll-behavior-x: none;
   overflow-x: hidden;
 }

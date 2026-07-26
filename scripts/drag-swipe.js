@@ -225,13 +225,23 @@
   // horizontal (bascule de site), un scroll vertical, ou le début d'une
   // sélection de texte (appui long) : tant que l'intention n'est pas
   // tranchée (DIRECTION_LOCK_PX franchi dans un sens ou l'autre), on ne
-  // touche à rien — ni preventDefault, ni classe "dragging" — pour que
-  // le navigateur garde la main sur le scroll/la sélection native. La
-  // souris, elle, n'a pas cette ambiguïté : intention résolue tout de
-  // suite.
+  // touche à rien. La souris, elle, n'a pas cette ambiguïté : intention
+  // résolue tout de suite (toujours horizontale).
+  //
+  // Le corps de page passe en touch-action: none (cf. CSS) : un seul
+  // doigt suffisait auparavant à faire basculer le navigateur en scroll
+  // natif dès le moindre micro-mouvement vertical (touch-action: pan-y
+  // laissait la main au navigateur sans repasser par notre JS), ce qui
+  // "mangeait" quasiment tous les gestes à un doigt et ne laissait le
+  // swipe fonctionner qu'à deux doigts (geste alors non concerné par le
+  // pan natif). Avec touch-action: none, tout geste tactile passe par
+  // notre JS : le scroll vertical est réimplémenté à la main
+  // (window.scrollBy) dès qu'un mouvement est reconnu comme vertical.
   const DIRECTION_LOCK_PX = 10;
   let startY = 0;
+  let lastY = 0;
   let intentResolved = false;
+  let verticalIntent = false;
 
   function onPointerDown(e) {
     if (e.button !== undefined && e.button !== 0) return;
@@ -244,10 +254,12 @@
     dragging = true;
     committed = false;
     hadDragMotion = false;
-    intentResolved = e.pointerType !== "touch"; // souris : pas d'ambiguïté à lever
+    intentResolved = !isTouch; // souris : pas d'ambiguïté à lever
+    verticalIntent = false;
     pointerId = e.pointerId;
     startX = e.clientX;
     startY = e.clientY;
+    lastY = e.clientY;
     currentDx = 0;
     document.body.classList.remove("settling");
   }
@@ -266,17 +278,23 @@
         return;
       }
       if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > DIRECTION_LOCK_PX) {
-        // Scroll vertical : on lâche complètement ce geste, le
-        // navigateur reprend la main nativement.
-        dragging = false;
-        return;
-      }
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > DIRECTION_LOCK_PX) {
+        intentResolved = true;
+        verticalIntent = true;
+      } else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > DIRECTION_LOCK_PX) {
         intentResolved = true;
         document.body.classList.add("dragging");
       } else {
         return; // pas assez de mouvement pour trancher
       }
+    }
+
+    if (verticalIntent) {
+      // touch-action: none désactive le scroll natif : on le rejoue
+      // nous-mêmes pendant que ce geste reste identifié comme vertical.
+      e.preventDefault();
+      window.scrollBy(0, lastY - e.clientY);
+      lastY = e.clientY;
+      return;
     }
 
     currentDx = dx;
@@ -292,6 +310,7 @@
   function onPointerUp(e) {
     if (!dragging || e.pointerId !== pointerId) return;
     dragging = false;
+    if (verticalIntent) return; // scroll manuel terminé, rien à "settle"
     document.body.classList.remove("dragging");
     const threshold = window.innerWidth * DRAG_THRESHOLD_RATIO;
     if (intentResolved && progressTowardNeighbor(currentDx) > threshold) {
