@@ -203,8 +203,8 @@
   // presque tout l'écran — exclure ces éléments au toucher ne laisserait
   // quasiment plus aucune zone de départ valide pour le swipe. On se
   // contente donc d'exclure les champs de saisie au toucher, et de
-  // laisser tomber notre drag en cours de route (voir onPointerMove) si
-  // une sélection démarre malgré tout.
+  // laisser tomber notre drag en cours de route (voir updateDrag) si une
+  // sélection démarre malgré tout.
   const FULL_TEXT_SELECTOR = "input, textarea, p, li, h1, h2, h3, span, strong, em, code, pre, blockquote, dt, dd, td, th";
   const TOUCH_TEXT_SELECTOR = "input, textarea";
 
@@ -231,43 +231,45 @@
   // Le corps de page passe en touch-action: none (cf. CSS) : un seul
   // doigt suffisait auparavant à faire basculer le navigateur en scroll
   // natif dès le moindre micro-mouvement vertical (touch-action: pan-y
-  // laissait la main au navigateur sans repasser par notre JS), ce qui
-  // "mangeait" quasiment tous les gestes à un doigt et ne laissait le
-  // swipe fonctionner qu'à deux doigts (geste alors non concerné par le
-  // pan natif). Avec touch-action: none, tout geste tactile passe par
-  // notre JS : le scroll vertical est réimplémenté à la main
-  // (window.scrollBy) dès qu'un mouvement est reconnu comme vertical.
+  // laissait la main au navigateur sans repasser par notre JS). Le
+  // scroll vertical est donc réimplémenté à la main (window.scrollBy)
+  // dès qu'un mouvement est reconnu comme vertical.
+  //
+  // IMPORTANT : le tactile est géré par les Touch Events natifs
+  // (touchstart/touchmove/touchend), PAS par les Pointer Events. Testé
+  // en conditions réelles (Chromium + émulation tactile) : avec
+  // touch-action: none, les Pointer Events se font annuler par un
+  // pointercancel prématuré après un seul mouvement (bug/quirk du
+  // moteur constaté indépendamment de notre logique — reproduit même
+  // avec des handlers vides). Les Touch Events, eux, reçoivent bien
+  // toute la séquence sans coupure. La souris reste sur Pointer Events
+  // (aucun souci constaté là, et ça couvre aussi stylet/trackpad).
   const DIRECTION_LOCK_PX = 10;
   let startY = 0;
   let lastY = 0;
   let intentResolved = false;
   let verticalIntent = false;
+  let activeTouchId = null;
 
-  function onPointerDown(e) {
-    if (e.button !== undefined && e.button !== 0) return;
-    const isTouch = e.pointerType === "touch";
-    if (e.target.closest(isTouch ? TOUCH_TEXT_SELECTOR : FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
-    if (isTouch) {
-      const edge = window.innerWidth * TOUCH_EDGE_RATIO;
-      if (e.clientX < edge || e.clientX > window.innerWidth - edge) return;
-    }
+  function beginDrag(clientX, clientY, isTouch) {
     dragging = true;
     committed = false;
     hadDragMotion = false;
     intentResolved = !isTouch; // souris : pas d'ambiguïté à lever
     verticalIntent = false;
-    pointerId = e.pointerId;
-    startX = e.clientX;
-    startY = e.clientY;
-    lastY = e.clientY;
+    startX = clientX;
+    startY = clientY;
+    lastY = clientY;
     currentDx = 0;
     document.body.classList.remove("settling");
   }
 
-  function onPointerMove(e) {
-    if (!dragging || e.pointerId !== pointerId) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+  // evt, si fourni, sert uniquement à preventDefault (scroll manuel /
+  // suppression du geste natif) — le reste ne dépend que des coordonnées.
+  function updateDrag(clientX, clientY, evt) {
+    if (!dragging) return;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
 
     if (!intentResolved) {
       const selection = window.getSelection && window.getSelection();
@@ -291,15 +293,15 @@
     if (verticalIntent) {
       // touch-action: none désactive le scroll natif : on le rejoue
       // nous-mêmes pendant que ce geste reste identifié comme vertical.
-      e.preventDefault();
-      window.scrollBy(0, lastY - e.clientY);
-      lastY = e.clientY;
+      if (evt) evt.preventDefault();
+      window.scrollBy(0, lastY - clientY);
+      lastY = clientY;
       return;
     }
 
     currentDx = dx;
     if (Math.abs(currentDx) > DRAG_MOTION_PX) hadDragMotion = true;
-    e.preventDefault();
+    if (evt) evt.preventDefault();
     if (progressTowardNeighbor(currentDx) > 0) {
       setLayers(currentDx);
     } else {
@@ -307,8 +309,8 @@
     }
   }
 
-  function onPointerUp(e) {
-    if (!dragging || e.pointerId !== pointerId) return;
+  function endDrag() {
+    if (!dragging) return;
     dragging = false;
     if (verticalIntent) return; // scroll manuel terminé, rien à "settle"
     document.body.classList.remove("dragging");
@@ -320,6 +322,69 @@
       settleCancelled();
     }
     currentDx = 0;
+  }
+
+  function abortDrag() {
+    if (!dragging) return;
+    dragging = false;
+    if (verticalIntent) return;
+    settleCancelled();
+  }
+
+  // --- Souris : Pointer Events ---
+  function onPointerDown(e) {
+    if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
+    if (e.button !== undefined && e.button !== 0) return;
+    if (e.target.closest(FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    pointerId = e.pointerId;
+    beginDrag(e.clientX, e.clientY, false);
+  }
+
+  function onPointerMove(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    updateDrag(e.clientX, e.clientY, e);
+  }
+
+  function onPointerUp(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    endDrag();
+  }
+
+  // --- Tactile : Touch Events ---
+  function onTouchStart(e) {
+    if (dragging) return; // un doigt déjà suivi
+    const t = e.touches[0];
+    if (e.target.closest(TOUCH_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    const edge = window.innerWidth * TOUCH_EDGE_RATIO;
+    if (t.clientX < edge || t.clientX > window.innerWidth - edge) return;
+    activeTouchId = t.identifier;
+    beginDrag(t.clientX, t.clientY, true);
+  }
+
+  function findActiveTouch(touchList) {
+    for (let i = 0; i < touchList.length; i++) {
+      if (touchList[i].identifier === activeTouchId) return touchList[i];
+    }
+    return null;
+  }
+
+  function onTouchMove(e) {
+    if (!dragging) return;
+    const t = findActiveTouch(e.touches);
+    if (!t) return;
+    updateDrag(t.clientX, t.clientY, e);
+  }
+
+  function onTouchEnd(e) {
+    if (!dragging) return;
+    if (findActiveTouch(e.touches)) return; // un autre doigt a levé, pas le nôtre
+    endDrag();
+  }
+
+  function onTouchCancel(e) {
+    if (!dragging) return;
+    if (findActiveTouch(e.touches)) return;
+    abortDrag();
   }
 
   // Le lien de secours (ex. "plain-language version") n'est PAS
@@ -401,15 +466,15 @@
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchCancel);
     // Coupe la sélection de texte native dès le pointerdown (avant même
     // que le seuil de drag soit atteint) : sans ça, un petit mouvement
     // sur du texte déclenche une sélection avant qu'on ait pu réagir.
     document.addEventListener("selectstart", (e) => {
       if (dragging) e.preventDefault();
-    });
-    document.addEventListener("pointercancel", () => {
-      dragging = false;
-      settleCancelled();
     });
 
     // Si un vrai geste de drag a démarré sur un lien/bouton (lang-switch,
