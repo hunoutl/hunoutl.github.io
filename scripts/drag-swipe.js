@@ -11,9 +11,10 @@
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
   const MIRROR_ORIGIN = "https://hunoutl.gitlab.io";
-  const MIRROR_CSS_URL = `${MIRROR_ORIGIN}/styles/facade.css`;
-  const MIRROR_JS_CONTENT_URL = `${MIRROR_ORIGIN}/scripts/content.js`;
-  const MIRROR_JS_DRAG_URL = `${MIRROR_ORIGIN}/scripts/drag-swipe.js`;
+  // Le préchargement des ressources du miroir (CSS/JS/photo) se fait
+  // désormais via des <link rel="prefetch"> statiques dans le <head>,
+  // vus par le navigateur dès le scanner de préchargement — bien plus tôt
+  // que ce que ce script pourrait déclencher lui-même.
   // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
   // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
   // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).

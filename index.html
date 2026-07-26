@@ -8,6 +8,17 @@
   <meta property="og:title" content="hunoutl — AI/HPC Engineer" />
   <meta property="og:description" content="4+ years building large-scale AI/HPC compute infrastructure." />
   <link rel="preconnect" href="https://hunoutl.gitlab.io" />
+  <!-- Précharge les ressources du site miroir dès le scanner de préchargement
+       du navigateur (donc en parallèle du tout premier rendu de CETTE page,
+       bien avant que le JS ne s'exécute) : au moment où l'iframe caché du
+       site miroir se crée, ces fichiers sont déjà en cache, ce qui rend le
+       geste de bascule encore plus immédiat. -->
+  <link rel="prefetch" href="https://hunoutl.gitlab.io/" as="document" />
+  <link rel="prefetch" href="https://hunoutl.gitlab.io/styles/facade.css" as="style" crossorigin />
+  <link rel="prefetch" href="https://hunoutl.gitlab.io/scripts/content.js" as="script" crossorigin />
+  <link rel="prefetch" href="https://hunoutl.gitlab.io/scripts/lang-switch.js" as="script" crossorigin />
+  <link rel="prefetch" href="https://hunoutl.gitlab.io/scripts/drag-swipe.js" as="script" crossorigin />
+  <link rel="prefetch" href="https://hunoutl.gitlab.io/assets/me.png" as="image" crossorigin />
   <link rel="stylesheet" href="styles/machine.css" />
   <style>
     html { background: #0b0e0c; }
