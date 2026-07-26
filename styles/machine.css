@@ -236,32 +236,22 @@ h2 {
 .mirror-hint {
   position: fixed;
   top: 1rem;
-  left: 1rem;
+  right: 1rem;
   z-index: 10;
-  font-size: 0.75rem;
-  color: var(--muted);
-  text-decoration: none;
-  opacity: 0.6;
   font-family: inherit;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.35rem 0.7rem;
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration: none;
+  opacity: 0.75;
 }
 
 .mirror-hint:hover {
   opacity: 1;
-}
-
-.mirror-hint-arrow {
-  display: inline-block;
-  transition: transform 0.2s ease;
-}
-
-.mirror-hint:hover .mirror-hint-arrow {
-  transform: translateX(3px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mirror-hint:hover .mirror-hint-arrow {
-    transform: none;
-  }
 }
 
 .lang-switch {

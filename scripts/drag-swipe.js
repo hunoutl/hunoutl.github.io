@@ -194,7 +194,18 @@
   // sélection : le drag n'y démarre pas. Les liens/boutons (mirror-hint,
   // lang-switch...), eux, PEUVENT servir de point de départ au drag —
   // seuls les champs de saisie restent exclus.
-  const TEXT_SELECTOR = "input, textarea, p, li, h1, h2, h3, span, strong, em, code, pre, blockquote, dt, dd, td, th";
+  //
+  // À la souris, un vrai clic-glisser démarré sur du texte doit lancer
+  // une sélection native, jamais notre swipe : FULL_TEXT_SELECTOR le
+  // garantit. Au doigt, la sélection se fait par appui long (pas par un
+  // simple glissement), et en layout mobile une colonne le texte occupe
+  // presque tout l'écran — exclure ces éléments au toucher ne laisserait
+  // quasiment plus aucune zone de départ valide pour le swipe. On se
+  // contente donc d'exclure les champs de saisie au toucher, et de
+  // laisser tomber notre drag en cours de route (voir onPointerMove) si
+  // une sélection démarre malgré tout.
+  const FULL_TEXT_SELECTOR = "input, textarea, p, li, h1, h2, h3, span, strong, em, code, pre, blockquote, dt, dd, td, th";
+  const TOUCH_TEXT_SELECTOR = "input, textarea";
 
   // Au-delà de cette distance, on considère qu'un vrai geste de drag a eu
   // lieu : le clic natif qui suivrait (sur un lien/bouton où le drag a
@@ -223,8 +234,9 @@
 
   function onPointerDown(e) {
     if (e.button !== undefined && e.button !== 0) return;
-    if (e.target.closest(TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
-    if (e.pointerType === "touch") {
+    const isTouch = e.pointerType === "touch";
+    if (e.target.closest(isTouch ? TOUCH_TEXT_SELECTOR : FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    if (isTouch) {
       const edge = window.innerWidth * TOUCH_EDGE_RATIO;
       if (e.clientX < edge || e.clientX > window.innerWidth - edge) return;
     }
@@ -245,9 +257,16 @@
     const dy = e.clientY - startY;
 
     if (!intentResolved) {
+      const selection = window.getSelection && window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        // Une vraie sélection de texte a démarré (appui long) : on
+        // laisse le navigateur faire, notre swipe n'a plus sa place ici.
+        dragging = false;
+        return;
+      }
       if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > DIRECTION_LOCK_PX) {
-        // Scroll vertical (ou sélection) : on lâche complètement ce
-        // geste, le navigateur reprend la main nativement.
+        // Scroll vertical : on lâche complètement ce geste, le
+        // navigateur reprend la main nativement.
         dragging = false;
         return;
       }
