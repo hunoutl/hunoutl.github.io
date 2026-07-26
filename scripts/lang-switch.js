@@ -30,6 +30,14 @@ function updateLangButton() {
   btn.setAttribute("aria-label", currentLang === "en" ? "Passer en français" : "Switch to English");
 }
 
+const MIRROR_HINT_LABEL = { fr: "Mode humain", en: "Human mode" };
+
+function updateMirrorHint() {
+  const link = document.getElementById("mirror-hint");
+  if (!link) return;
+  link.textContent = MIRROR_HINT_LABEL[currentLang] || MIRROR_HINT_LABEL[DEFAULT_LANG];
+}
+
 function toggleLanguage() {
   const container = document.getElementById("floors");
   const nextLang = currentLang === "en" ? "fr" : "en";
@@ -39,6 +47,7 @@ function toggleLanguage() {
     localStorage.setItem(STORAGE_KEY, currentLang);
     renderFloors(currentLang);
     updateLangButton();
+    updateMirrorHint();
     requestAnimationFrame(() => {
       container.classList.remove("lang-fading");
     });
@@ -48,5 +57,6 @@ function toggleLanguage() {
 document.addEventListener("DOMContentLoaded", () => {
   renderFloors(currentLang);
   updateLangButton();
+  updateMirrorHint();
   document.getElementById("lang-switch").addEventListener("click", toggleLanguage);
 });

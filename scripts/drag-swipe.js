@@ -73,6 +73,7 @@
       localStorage.setItem("siteLang", currentLang);
       renderFloors(currentLang);
       if (typeof updateLangButton === "function") updateLangButton();
+      if (typeof updateMirrorHint === "function") updateMirrorHint();
     }
   }
 
