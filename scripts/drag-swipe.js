@@ -11,11 +11,10 @@
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
   const MIRROR_ORIGIN = "https://hunoutl.gitlab.io";
-  // Le miroir n'est pas préfetché depuis le <head> : le cache HTTP des
-  // navigateurs étant partitionné par site de premier niveau, une ressource
-  // préfetchée ici ne serait jamais réutilisée par l'iframe ci-dessous, qui
-  // est un contexte tiers. Seul un <link rel="preconnect"> subsiste, lui
-  // bien utile (poignée de main TCP/TLS établie d'avance).
+  // Le préchargement des ressources du miroir (CSS/JS/photo) se fait
+  // désormais via des <link rel="prefetch"> statiques dans le <head>,
+  // vus par le navigateur dès le scanner de préchargement — bien plus tôt
+  // que ce que ce script pourrait déclencher lui-même.
   // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
   // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
   // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).

@@ -15,7 +15,7 @@ const FLOORS = [
     en: () => `
       <p class="prompt">leo@hpc:~$ whoami</p>
       <div class="hero-layout">
-        <img class="profile-photo" src="assets/me.webp" alt="Photo of Léo Hunout" width="176" height="176" fetchpriority="high" decoding="async" />
+        <img class="profile-photo" src="assets/me.png" alt="Photo of Léo Hunout" width="176" height="176" />
         <div class="hero-text">
           <h1>hunoutl — AI/HPC Engineer</h1>
           <p class="subtitle">uptime: 4+ years · large-scale AI &amp; HPC infra</p>
@@ -36,7 +36,7 @@ const FLOORS = [
     fr: () => `
       <p class="prompt">leo@hpc:~$ whoami</p>
       <div class="hero-layout">
-        <img class="profile-photo" src="assets/me.webp" alt="Photo de Léo Hunout" width="176" height="176" fetchpriority="high" decoding="async" />
+        <img class="profile-photo" src="assets/me.png" alt="Photo de Léo Hunout" width="176" height="176" />
         <div class="hero-text">
           <h1>hunoutl — Ingénieur AI/HPC</h1>
           <p class="subtitle">uptime : 4+ ans · infra IA &amp; HPC à grande échelle</p>
