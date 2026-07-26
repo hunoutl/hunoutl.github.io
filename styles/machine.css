@@ -5,6 +5,10 @@
   --accent: #3ddc84;
   --muted: #6f9e80;
   --line: #1c2620;
+  /* Même valeur des deux côtés Façade/Machine : c'est ce qui garantit
+     que le bandeau tombe exactement à la même hauteur dans l'aperçu
+     iframe pendant le drag. */
+  --bar-height: 3.25rem;
 }
 
 * {
@@ -125,6 +129,7 @@ body.settling .floor-inner {
 }
 
 #floors {
+  padding-top: var(--bar-height);
   transition: opacity 0.18s ease;
 }
 
@@ -251,11 +256,28 @@ h2 {
   border-radius: 2px;
 }
 
-.mirror-hint {
+/* Bandeau plein écran plutôt que deux boutons flottants isolés : sur
+   mobile, un bouton flottant se retrouvait au-dessus du texte des
+   étages, jamais parfaitement aligné entre la page réelle et l'aperçu
+   iframe pendant le drag (fixed = relatif au viewport de CHAQUE
+   document). Un bandeau de la couleur de fond, à la même hauteur des
+   deux côtés, élimine ce décalage visuel au moment de la bascule. */
+.site-bar {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--bar-height);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  background: var(--bg);
+}
+
+.mirror-hint,
+.lang-switch {
   font-family: inherit;
   font-size: 0.75rem;
   background: transparent;
@@ -268,26 +290,7 @@ h2 {
   opacity: 0.75;
 }
 
-.mirror-hint:hover {
-  opacity: 1;
-}
-
-.lang-switch {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 10;
-  font-family: inherit;
-  font-size: 0.75rem;
-  background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  padding: 0.35rem 0.7rem;
-  border-radius: 2px;
-  cursor: pointer;
-  opacity: 0.75;
-}
-
+.mirror-hint:hover,
 .lang-switch:hover {
   opacity: 1;
 }
