@@ -443,6 +443,14 @@
   // l'autre sans passer par l'URL. On la lit puis on la vide tout de
   // suite : sinon elle resterait attachée à l'onglet et fausserait un
   // futur rechargement "normal" (hors drag) de cette même page.
+  let arrivalSf = null;
+
+  function applyArrivalScroll() {
+    if (arrivalSf === null) return;
+    const max = document.documentElement.scrollHeight - viewportHeight();
+    if (max > 0) window.scrollTo(0, arrivalSf * max);
+  }
+
   function handleArrival() {
     let payload = null;
     if (window.name) {
@@ -457,9 +465,8 @@
     syncIncomingLang(payload.lang);
 
     if (typeof payload.sf === "number") {
-      const sf = Math.min(1, Math.max(0, payload.sf));
-      const max = document.documentElement.scrollHeight - viewportHeight();
-      if (max > 0) window.scrollTo(0, sf * max);
+      arrivalSf = Math.min(1, Math.max(0, payload.sf));
+      applyArrivalScroll();
     }
   }
 
@@ -469,7 +476,20 @@
     document.addEventListener("floors-rendered", refreshFloors);
     onScroll();
     handleArrival();
-    document.documentElement.style.visibility = "visible";
+    // Un redimensionnement tardif (image/police qui finit de charger après
+    // DOMContentLoaded) peut agrandir légèrement la page après ce premier
+    // positionnement, décalant la position visible ("elle remonte") une
+    // fois la page révélée. On reste caché jusqu'au 'load' complet, où l'on
+    // réapplique la même position avec la mise en page définitive.
+    if (document.readyState === "complete") {
+      applyArrivalScroll();
+      document.documentElement.style.visibility = "visible";
+    } else {
+      window.addEventListener("load", () => {
+        applyArrivalScroll();
+        document.documentElement.style.visibility = "visible";
+      });
+    }
 
     if (reduceMotion || isEmbedded) {
       document.body.classList.add("reduced-motion");
