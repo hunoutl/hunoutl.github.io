@@ -20,6 +20,10 @@
   const NEIGHBOR_DIRECTION = -1;
   const DRAG_THRESHOLD_RATIO = 0.22; // fraction de la largeur d'écran
   const SETTLE_MS = 260;
+  // Le clic sur le bouton n'a pas le retour tactile immédiat d'un
+  // vrai geste de drag : une bascule instantanée y paraît plus abrupte,
+  // donc on lui laisse une animation un peu plus longue.
+  const BUTTON_SETTLE_MS = 420;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isEmbedded = window.self !== window.top;
 
@@ -168,15 +172,16 @@
     window.location.href = `${MIRROR_ORIGIN}/`;
   }
 
-  function settleCommitted() {
+  function settleCommitted(durationMs) {
+    const ms = durationMs || SETTLE_MS;
     const w = window.innerWidth;
     document.body.classList.add("settling");
     document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
     if (mirrorFrame) {
-      mirrorFrame.style.transition = `transform ${SETTLE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+      mirrorFrame.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
       mirrorFrame.style.transform = "translateX(0px)";
     }
-    window.setTimeout(goToMirrorReal, SETTLE_MS);
+    window.setTimeout(goToMirrorReal, ms);
   }
 
   function settleCancelled() {
@@ -491,7 +496,7 @@
       e.preventDefault();
       dragging = false;
       committed = true;
-      settleCommitted();
+      settleCommitted(BUTTON_SETTLE_MS);
     });
   });
 })();

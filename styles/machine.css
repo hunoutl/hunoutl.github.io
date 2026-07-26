@@ -143,7 +143,7 @@ body.settling .floor-inner {
   width: 100vw;
   height: 100vh;
   border: none;
-  z-index: 60;
+  z-index: 15;
   pointer-events: none;
   background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
 }
@@ -268,7 +268,15 @@ h2 {
   left: 0;
   right: 0;
   height: var(--bar-height);
-  z-index: 20;
+  /* Doit rester AU-DESSUS de #mirror-frame : on a constaté sur mobile
+     (pas sur laptop) que le bandeau propre à l'iframe miroir peut ne
+     pas se repeindre correctement pendant le transform du drag (lag de
+     composition propre aux iframes cross-origin). Solution robuste :
+     ne jamais compter sur le rendu du bandeau DANS l'iframe pendant le
+     geste — le vrai bandeau de CETTE page (toujours nativement à jour)
+     reste affiché par-dessus tout du long, seul le contenu en dessous
+     glisse. */
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: space-between;
