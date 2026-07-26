@@ -68,6 +68,14 @@ body {
   min-height: 1900px;
 }
 
+/* Même principe pour "compétences" : les deux tons ont un contenu de
+   longueur assez différente (liste vs bloc YAML) pour créer un écart de
+   hauteur notable, ce qui décalait la correspondance de fraction de
+   scroll entre les deux sites dès qu'on passait de l'un à l'autre. */
+.floor[data-floor-id="competences"] {
+  min-height: 860px;
+}
+
 .floor-inner {
   max-width: 680px;
   margin: 0 auto;
