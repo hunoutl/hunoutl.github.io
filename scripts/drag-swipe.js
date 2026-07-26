@@ -332,6 +332,13 @@
     if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
     if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest(FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    // Tant que l'iframe miroir n'a pas fini de charger (CSS + son propre JS,
+    // qui remplit par ex. le texte du bouton de bascule), la faire glisser
+    // à l'écran révèlerait une page à moitié initialisée — constaté comme
+    // la cause du bandeau "parfois" incomplet en aperçu. On laisse
+    // simplement le geste ne rien faire ce court instant plutôt que de
+    // montrer un état intermédiaire.
+    if (!mirrorFrameReady) return;
     pointerId = e.pointerId;
     beginDrag(e.clientX, e.clientY, false);
   }
@@ -349,6 +356,7 @@
   // --- Tactile : Touch Events ---
   function onTouchStart(e) {
     if (dragging) return; // un doigt déjà suivi
+    if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
     const t = e.touches[0];
     if (e.target.closest(TOUCH_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
     const edge = window.innerWidth * TOUCH_EDGE_RATIO;

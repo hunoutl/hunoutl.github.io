@@ -66,9 +66,13 @@ body {
 /* Étage avec beaucoup de contenu : hauteur fixe (même valeur des deux
    côtés Façade/Machine) plutôt qu'une mesure dynamique en JS — celle-ci
    provoquait un léger redimensionnement après l'affichage de la page
-   (donc un flash) le temps que l'échange avec le site miroir se termine. */
+   (donc un flash) le temps que l'échange avec le site miroir se termine.
+   Valeurs mesurées en largeur mobile (390px, l'un des deux textes y
+   passe à plus de lignes qu'en desktop) + marge, pas seulement en
+   desktop — sinon l'écart réapparaît sur mobile dès que le retour à la
+   ligne change. */
 .floor[data-floor-id="experiences"] {
-  min-height: 1900px;
+  min-height: 2350px;
 }
 
 /* Même principe pour "compétences" : les deux tons ont un contenu de
@@ -82,7 +86,15 @@ body {
 /* Idem pour le hero : le texte d'intro n'a pas la même longueur en FR/EN
    selon le ton, ce qui décalait déjà légèrement tous les étages suivants. */
 .floor[data-floor-id="hero"] {
-  min-height: 860px;
+  min-height: 950px;
+}
+
+/* "À propos" n'avait jusqu'ici aucune hauteur forcée : sur mobile, le
+   texte anglais (plus long à cette largeur) déborde du premier écran
+   alors que la version FR y tient encore, ce qui décale tout le reste
+   du scroll par fraction. */
+.floor[data-floor-id="apropos"] {
+  min-height: 760px;
 }
 
 .floor-inner {
