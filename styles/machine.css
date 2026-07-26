@@ -32,12 +32,11 @@ body {
   color: var(--ink);
   font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
   line-height: 1.6;
-  /* none plutôt que pan-y : pan-y laisse le navigateur prendre la main
-     sur le scroll natif dès le moindre micro-mouvement vertical, sans
-     repasser par notre JS — ce qui "mangeait" le geste de swipe à un
-     doigt (cf. drag-swipe.js). Avec none, tout passe par notre JS, qui
-     réimplémente lui-même le scroll vertical. */
-  touch-action: none;
+  /* pan-y : scroll vertical natif (fluide, avec inertie). Le swipe
+     horizontal est géré par des Touch Events dédiés (cf. drag-swipe.js)
+     qui interceptent proprement le geste — voir le commentaire détaillé
+     là-bas avant de retoucher à cette valeur. */
+  touch-action: pan-y;
   overscroll-behavior-x: none;
   overflow-x: hidden;
 }
@@ -73,6 +72,12 @@ body {
    hauteur notable, ce qui décalait la correspondance de fraction de
    scroll entre les deux sites dès qu'on passait de l'un à l'autre. */
 .floor[data-floor-id="competences"] {
+  min-height: 860px;
+}
+
+/* Idem pour le hero : le texte d'intro n'a pas la même longueur en FR/EN
+   selon le ton, ce qui décalait déjà légèrement tous les étages suivants. */
+.floor[data-floor-id="hero"] {
   min-height: 860px;
 }
 

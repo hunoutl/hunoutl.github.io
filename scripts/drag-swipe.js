@@ -228,12 +228,11 @@
   // touche à rien. La souris, elle, n'a pas cette ambiguïté : intention
   // résolue tout de suite (toujours horizontale).
   //
-  // Le corps de page passe en touch-action: none (cf. CSS) : un seul
-  // doigt suffisait auparavant à faire basculer le navigateur en scroll
-  // natif dès le moindre micro-mouvement vertical (touch-action: pan-y
-  // laissait la main au navigateur sans repasser par notre JS). Le
-  // scroll vertical est donc réimplémenté à la main (window.scrollBy)
-  // dès qu'un mouvement est reconnu comme vertical.
+  // Le corps de page reste en touch-action: pan-y (cf. CSS) : le scroll
+  // vertical est nativement géré par le navigateur (fluide, avec
+  // inertie) dès qu'un mouvement est reconnu comme vertical — on lâche
+  // alors complètement ce geste (dragging=false) sans jamais appeler
+  // preventDefault dessus.
   //
   // IMPORTANT : le tactile est géré par les Touch Events natifs
   // (touchstart/touchmove/touchend), PAS par les Pointer Events. Testé
@@ -241,14 +240,15 @@
   // touch-action: none, les Pointer Events se font annuler par un
   // pointercancel prématuré après un seul mouvement (bug/quirk du
   // moteur constaté indépendamment de notre logique — reproduit même
-  // avec des handlers vides). Les Touch Events, eux, reçoivent bien
-  // toute la séquence sans coupure. La souris reste sur Pointer Events
-  // (aucun souci constaté là, et ça couvre aussi stylet/trackpad).
+  // avec des handlers vides). Repasser en touch-action: none pour
+  // "simplifier" réintroduirait ce bug — ne pas y retoucher sans retest.
+  // Les Touch Events reçoivent toute la séquence sans coupure, et avec
+  // pan-y le scroll vertical n'a même plus besoin d'être réimplémenté à
+  // la main. La souris reste sur Pointer Events (aucun souci constaté
+  // là, et ça couvre aussi stylet/trackpad).
   const DIRECTION_LOCK_PX = 10;
   let startY = 0;
-  let lastY = 0;
   let intentResolved = false;
-  let verticalIntent = false;
   let activeTouchId = null;
 
   function beginDrag(clientX, clientY, isTouch) {
@@ -256,16 +256,14 @@
     committed = false;
     hadDragMotion = false;
     intentResolved = !isTouch; // souris : pas d'ambiguïté à lever
-    verticalIntent = false;
     startX = clientX;
     startY = clientY;
-    lastY = clientY;
     currentDx = 0;
     document.body.classList.remove("settling");
   }
 
-  // evt, si fourni, sert uniquement à preventDefault (scroll manuel /
-  // suppression du geste natif) — le reste ne dépend que des coordonnées.
+  // evt, si fourni, sert uniquement à preventDefault le geste natif une
+  // fois confirmé horizontal — le reste ne dépend que des coordonnées.
   function updateDrag(clientX, clientY, evt) {
     if (!dragging) return;
     const dx = clientX - startX;
@@ -280,23 +278,17 @@
         return;
       }
       if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > DIRECTION_LOCK_PX) {
-        intentResolved = true;
-        verticalIntent = true;
-      } else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > DIRECTION_LOCK_PX) {
+        // Scroll vertical : touch-action: pan-y laisse le navigateur le
+        // gérer nativement (scroll fluide, inertie) — on lâche ce geste.
+        dragging = false;
+        return;
+      }
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > DIRECTION_LOCK_PX) {
         intentResolved = true;
         document.body.classList.add("dragging");
       } else {
         return; // pas assez de mouvement pour trancher
       }
-    }
-
-    if (verticalIntent) {
-      // touch-action: none désactive le scroll natif : on le rejoue
-      // nous-mêmes pendant que ce geste reste identifié comme vertical.
-      if (evt) evt.preventDefault();
-      window.scrollBy(0, lastY - clientY);
-      lastY = clientY;
-      return;
     }
 
     currentDx = dx;
@@ -312,7 +304,6 @@
   function endDrag() {
     if (!dragging) return;
     dragging = false;
-    if (verticalIntent) return; // scroll manuel terminé, rien à "settle"
     document.body.classList.remove("dragging");
     const threshold = window.innerWidth * DRAG_THRESHOLD_RATIO;
     if (intentResolved && progressTowardNeighbor(currentDx) > threshold) {
@@ -327,7 +318,6 @@
   function abortDrag() {
     if (!dragging) return;
     dragging = false;
-    if (verticalIntent) return;
     settleCancelled();
   }
 
