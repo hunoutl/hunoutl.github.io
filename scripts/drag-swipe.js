@@ -425,6 +425,13 @@
     iframe.src = `${MIRROR_ORIGIN}/?embedded=1`;
     iframe.setAttribute("aria-hidden", "true");
     iframe.tabIndex = -1;
+    // Largeur/hauteur en px exacts (pas 100vw/100vh en CSS) : sur mobile,
+    // 100vw ne correspond pas toujours pixel pour pixel à window.innerWidth
+    // (utilisé ci-dessous et dans setLayers pour le calcul du transform) —
+    // l'écart, même sub-pixel, laissait un filet de la couleur du site
+    // cible visible sur un bord.
+    iframe.style.width = `${window.innerWidth}px`;
+    iframe.style.height = `${window.innerHeight}px`;
     iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
     iframe.addEventListener("load", () => {
       mirrorFrameReady = true;
