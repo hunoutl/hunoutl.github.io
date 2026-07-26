@@ -64,6 +64,15 @@
     return best ? best.id : "hero";
   }
 
+  // On synchronise en pixels ABSOLUS (scrollY), pas en fraction : les deux
+  // sites ont maintenant des hauteurs de page quasi identiques (étages à
+  // hauteur fixe partagée), donc un même scrollY tombe déjà au même
+  // endroit visuel des deux côtés. La fraction (scrollY / (scrollHeight -
+  // hauteur de viewport)) dépendait de la hauteur de viewport mesurée à
+  // l'instant T — sur mobile, cette valeur peut légèrement varier entre le
+  // moment de l'aperçu (pendant le drag) et celui de l'atterrissage réel
+  // (après navigation), ce qui décalait la position de façon intermittente.
+  // Rester en pixels bruts supprime cette dépendance.
   function scrollFraction() {
     const max = document.documentElement.scrollHeight - viewportHeight();
     if (max <= 0) return 0;
@@ -73,7 +82,7 @@
   function syncMirrorFrameScroll() {
     if (!mirrorFrame || !mirrorFrameReady) return;
     const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
-    mirrorFrame.contentWindow.postMessage({ type: "sync-scroll", sf: scrollFraction(), lang }, MIRROR_ORIGIN);
+    mirrorFrame.contentWindow.postMessage({ type: "sync-scroll", scrollY: window.scrollY, lang }, MIRROR_ORIGIN);
   }
 
   // Partagé par l'arrivée réelle (handleArrival) et l'aperçu synchronisé
@@ -165,23 +174,20 @@
 
   function goToMirrorReal() {
     updateSpeculation();
-    // Fraction exacte (non arrondie) : lastSpecSf est arrondi à 2 décimales
-    // pour limiter les mises à jour de Speculation Rules, ce qui suffisait
-    // à créer un petit décalage visible au réatterrissage sur l'autre site.
-    const sf = scrollFraction();
+    const scrollY = window.scrollY;
     const floorId = lastSpecFloor !== null ? lastSpecFloor : currentFloorId;
     // window.name survit à une navigation complète (même cross-domaine)
     // et n'est lisible que par du JS : ça garde l'URL propre, pas de
     // paramètre technique visible/partageable dans la barre d'adresse.
     // Important : PAS de #floorId ici — le scroll natif du navigateur
-    // sur l'ancre viendrait écraser le repositionnement précis (sf)
+    // sur l'ancre viendrait écraser le repositionnement précis (scrollY)
     // qu'on s'apprête à faire nous-mêmes à l'arrivée.
     // La langue de la page de départ voyage aussi, pour que le site
     // d'arrivée affiche la même langue plutôt que sa préférence propre
     // (typeof-guard : lang-switch.js est chargé avant, mais on ne
     // suppose rien s'il venait à manquer).
     const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
-    window.name = JSON.stringify({ from: "drag", sf, floorId, lang });
+    window.name = JSON.stringify({ from: "drag", scrollY, floorId, lang });
     window.location.href = `${MIRROR_ORIGIN}/`;
   }
 
@@ -434,21 +440,20 @@
       const data = e.data;
       if (!data || data.type !== "sync-scroll") return;
       syncIncomingLang(data.lang);
-      const max = document.documentElement.scrollHeight - viewportHeight();
-      if (max > 0) window.scrollTo(0, data.sf * max);
+      const max = document.documentElement.scrollHeight;
+      if (typeof data.scrollY === "number") window.scrollTo(0, Math.min(data.scrollY, max));
     });
   }
 
-  // window.name transporte la position exacte (sf) d'un domaine à
+  // window.name transporte la position exacte (scrollY) d'un domaine à
   // l'autre sans passer par l'URL. On la lit puis on la vide tout de
   // suite : sinon elle resterait attachée à l'onglet et fausserait un
   // futur rechargement "normal" (hors drag) de cette même page.
-  let arrivalSf = null;
+  let arrivalScrollY = null;
 
   function applyArrivalScroll() {
-    if (arrivalSf === null) return;
-    const max = document.documentElement.scrollHeight - viewportHeight();
-    if (max > 0) window.scrollTo(0, arrivalSf * max);
+    if (arrivalScrollY === null) return;
+    window.scrollTo(0, Math.min(arrivalScrollY, document.documentElement.scrollHeight));
   }
 
   function handleArrival() {
@@ -464,8 +469,8 @@
     if (!payload || payload.from !== "drag") return;
     syncIncomingLang(payload.lang);
 
-    if (typeof payload.sf === "number") {
-      arrivalSf = Math.min(1, Math.max(0, payload.sf));
+    if (typeof payload.scrollY === "number") {
+      arrivalScrollY = payload.scrollY;
       applyArrivalScroll();
     }
   }
