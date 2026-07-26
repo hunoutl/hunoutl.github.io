@@ -157,6 +157,12 @@ body.settling .floor-inner {
   border: none;
   z-index: 60;
   pointer-events: none;
+  /* Promeut l'iframe sur son propre calque GPU dès sa création, pas au
+     premier vrai drag : sans ça, le tout premier transform anime un
+     calque pas encore rasterisé, et la peinture (dont le bandeau du
+     haut) peut arriver en retard d'une frame ou deux — constaté comme
+     "pas de bandeau au premier essai, mais oui au deuxième". */
+  will-change: transform;
   background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
 }
 

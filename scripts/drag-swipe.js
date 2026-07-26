@@ -28,6 +28,18 @@
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isEmbedded = window.self !== window.top;
 
+  // window.innerHeight varie pendant le scroll sur mobile (la barre
+  // d'adresse se réduit/réapparaît) : deux mesures de fraction de scroll
+  // prises à des moments différents (page fraîchement arrivée vs après
+  // avoir déjà pas mal scrollé ailleurs) ne comptent alors pas la même
+  // hauteur, ce qui décale la correspondance entre les deux sites — visible
+  // seulement après avoir déjà navigué une fois. visualViewport.height
+  // reflète la hauteur réellement visible à l'instant T, de façon plus
+  // stable dans ce cas précis.
+  function viewportHeight() {
+    return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  }
+
   let floors = [];
   let currentFloorId = "hero";
   let dragging = false;
@@ -41,7 +53,7 @@
   function currentFloorFromScroll() {
     let best = floors[0];
     let bestDist = Infinity;
-    const center = window.scrollY + window.innerHeight / 2;
+    const center = window.scrollY + viewportHeight() / 2;
     for (const el of floors) {
       const dist = Math.abs(el.offsetTop + el.offsetHeight / 2 - center);
       if (dist < bestDist) {
@@ -53,7 +65,7 @@
   }
 
   function scrollFraction() {
-    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const max = document.documentElement.scrollHeight - viewportHeight();
     if (max <= 0) return 0;
     return Math.min(1, Math.max(0, window.scrollY / max));
   }
@@ -422,7 +434,7 @@
       const data = e.data;
       if (!data || data.type !== "sync-scroll") return;
       syncIncomingLang(data.lang);
-      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const max = document.documentElement.scrollHeight - viewportHeight();
       if (max > 0) window.scrollTo(0, data.sf * max);
     });
   }
@@ -446,7 +458,7 @@
 
     if (typeof payload.sf === "number") {
       const sf = Math.min(1, Math.max(0, payload.sf));
-      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const max = document.documentElement.scrollHeight - viewportHeight();
       if (max > 0) window.scrollTo(0, sf * max);
     }
   }
