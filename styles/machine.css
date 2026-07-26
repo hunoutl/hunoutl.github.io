@@ -151,16 +151,9 @@ body.settling .floor-inner {
 
 #mirror-frame {
   position: fixed;
-  /* 1px de débordement de chaque côté (pas inset: 0 / 100vw pile) : sur
-     certains ratios de pixels d'écran mobile, l'arrondi laisse un
-     interstice d'1px révélant la couleur de fond du site cible en
-     dessous. Le débordement masque cet interstice sans se voir. */
-  top: -1px;
-  bottom: -1px;
-  left: -1px;
-  right: -1px;
-  width: calc(100vw + 2px);
-  height: calc(100vh + 2px);
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
   border: none;
   z-index: 60;
   pointer-events: none;
