@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>hunoutl — AI/HPC Engineer</title>
+  <meta name="description" content="Léo Hunout, AI/HPC infrastructure engineer. Swipe right for the plain-language version." />
+  <meta property="og:title" content="hunoutl — AI/HPC Engineer" />
+  <meta property="og:description" content="4+ years building large-scale AI/HPC compute infrastructure." />
+  <link rel="preconnect" href="http://localhost:8811" />
+  <link rel="stylesheet" href="styles/machine.css" />
+  <style>
+    html { background: #0b0e0c; }
+  </style>
+  <script>
+    // Synchrone, avant le CSS/JS externe : si on arrive via le swipe
+    // (payload transmis dans window.name, pas dans l'URL), masquer tout
+    // de suite pour éviter tout flash avant que drag-swipe.js repositionne
+    // le scroll. Lecture seule ici — le nettoyage définitif se fait dans
+    // drag-swipe.js (handleArrival), une seule fois.
+    if (window.name && window.name.indexOf('"from":"drag"') !== -1) {
+      document.documentElement.style.visibility = "hidden";
+    }
+  </script>
+</head>
+<body>
+  <a class="mirror-hint" data-mirror-link href="#" data-floor-id="hero">
+    plain-language version
+  </a>
+
+  <button id="lang-switch" class="lang-switch" type="button">FR</button>
+
+  <div class="drag-hint" aria-hidden="true">
+    <span>swipe</span>
+    <span class="drag-hint-arrow">→</span>
+  </div>
+
+  <main id="floors"></main>
+
+  <script src="scripts/content.js"></script>
+  <script src="scripts/lang-switch.js"></script>
+  <script src="scripts/drag-swipe.js"></script>
+</body>
+</html>

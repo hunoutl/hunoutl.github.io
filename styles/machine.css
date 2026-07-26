@@ -1,0 +1,320 @@
+:root {
+  --drag-x: 0px;
+  --bg: #0b0e0c;
+  --ink: #d6f5df;
+  --accent: #3ddc84;
+  --muted: #6f9e80;
+  --line: #1c2620;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0; /* Chrome/Safari, aussi masqué à l'intérieur de l'iframe miroir */
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
+  line-height: 1.6;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+  overflow-x: hidden;
+}
+
+.floor {
+  /* min-height (pas height fixe) : un étage court reste calé sur un
+     plein écran, mais un étage avec beaucoup de contenu (ex.
+     expériences) grandit automatiquement au lieu d'être coupé avec un
+     ascenseur interne. Le raccord de scroll entre Façade et Machine se
+     fait par fraction (0–1), donc un léger écart de hauteur naturelle
+     entre les deux versions du même étage n'introduit pas de décalage
+     perceptible.  */
+  min-height: 100vh;
+  overflow-x: hidden;
+  display: flex;
+  align-items: center;
+  padding: 4rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background-image: linear-gradient(rgba(61, 220, 132, 0.03) 1px, transparent 1px);
+  background-size: 100% 2px;
+}
+
+/* Étage avec beaucoup de contenu : hauteur fixe (même valeur des deux
+   côtés Façade/Machine) plutôt qu'une mesure dynamique en JS — celle-ci
+   provoquait un léger redimensionnement après l'affichage de la page
+   (donc un flash) le temps que l'échange avec le site miroir se termine. */
+.floor[data-floor-id="experiences"] {
+  min-height: 1900px;
+}
+
+.floor-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  transform: translateX(var(--drag-x));
+  transition: transform 0.05s linear;
+}
+
+.floor[data-floor-id="hero"] .floor-inner {
+  max-width: 800px;
+}
+
+.hero-layout {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.hero-text {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .hero-layout {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+body.dragging .floor-inner,
+body.dragging #mirror-frame {
+  transition: none;
+}
+
+body.dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+body.settling .floor-inner {
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#floors {
+  transition: opacity 0.18s ease;
+}
+
+#floors.lang-fading {
+  opacity: 0;
+}
+
+#mirror-frame {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: none;
+  z-index: 60;
+  pointer-events: none;
+  background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
+}
+
+.prompt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.prompt::before {
+  content: "";
+}
+
+.profile-photo {
+  display: block;
+  flex-shrink: 0;
+  width: 176px;
+  height: 176px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+}
+
+.lede {
+  color: var(--ink);
+}
+
+.quick-contacts {
+  margin-top: 2rem;
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.quick-contacts a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.quick-contacts a:hover {
+  opacity: 1;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.timeline article {
+  margin-bottom: 2rem;
+}
+
+.timeline h3 {
+  margin: 0 0 0.25rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.skills {
+  list-style: none;
+  padding: 0;
+}
+
+.skills li {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.95rem;
+}
+
+.skills li strong {
+  color: var(--accent);
+}
+
+.cv-download {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  border-radius: 2px;
+}
+
+.mirror-hint {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 10;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.6;
+  font-family: inherit;
+}
+
+.mirror-hint:hover {
+  opacity: 1;
+}
+
+/* Indice de glissement, visible seulement sur le 1er étage (hero) : au
+   body.at-hero (posé par drag-swipe.js selon l'étage courant). */
+.drag-hint {
+  position: fixed;
+  bottom: 1.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+body.at-hero .drag-hint {
+  opacity: 0.7;
+}
+
+.drag-hint-arrow {
+  display: inline-block;
+  animation: drag-hint-bounce 1.6s ease-in-out infinite;
+}
+
+@keyframes drag-hint-bounce {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drag-hint-arrow {
+    animation: none;
+  }
+}
+
+.lang-switch {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 10;
+  font-family: inherit;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.35rem 0.7rem;
+  border-radius: 2px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.lang-switch:hover {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floor-inner {
+    transition: none;
+  }
+}
