@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// POC "bascule invisible" : produit dist/index.html, un fichier UNIQUE
+// Build du site : produit dist/index.html, un fichier UNIQUE
 // tout-inline (CSS, JS, photo en data URI).
 //
 // Pourquoi : github.io et gitlab.io sont deux sites distincts, donc les
@@ -8,9 +8,10 @@
 // le prefetch du seul document (Speculation Rules, cf. drag-swipe.js)
 // suffit : l'arrivée n'a plus aucune requête réseau à faire.
 //
-// Usage : MIRROR_URL=https://hunoutl.github.io/poc/ node tools/build-poc.mjs
-// (MIRROR_URL = URL de base du site miroir, slash final ; par défaut celle
-// codée dans drag-swipe.js.)
+// Usage : node tools/build.mjs (lancé par la CI avant déploiement)
+// Test en réseau local : MIRROR_URL=http://<ip-ou-nom>:<port>/ node tools/build.mjs
+// (URL de base du site miroir, slash final ; par défaut la production
+// codée dans drag-swipe.js.) Ajouter ?debug=1 pour le panneau de mesures.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";

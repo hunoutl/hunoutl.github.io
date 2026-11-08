@@ -23,9 +23,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Fichier unique tout-inline (cf. tools/build.mjs) : condition pour
+      # que le prefetch cross-site du document suffise à l'arrivée.
       - run: |
+          node tools/build.mjs
           mkdir -p _site
-          cp -r index.html assets scripts styles poc _site/
+          cp dist/index.html _site/
+          cp -r assets _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

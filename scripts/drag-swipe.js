@@ -10,8 +10,8 @@
 // n'est déclenchée qu'une fois l'iframe déjà en pleine couverture de
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
-  // URL de base du site miroir (avec slash final). tools/build-poc.mjs
-  // réécrit cette ligne pour les tests locaux / le déploiement sous /poc/.
+  // URL de base du site miroir (avec slash final). tools/build.mjs peut
+  // réécrire cette ligne (MIRROR_URL=...) pour les tests en réseau local.
   const MIRROR_URL = "https://hunoutl.gitlab.io/";
   const MIRROR_ORIGIN = new URL(MIRROR_URL).origin;
   // Payload d'arrivée transmis dans le fragment d'URL : "#~sw.<scrollY>.<lang>.<flags>".
@@ -144,7 +144,7 @@
     return typeof currentLang !== "undefined" ? currentLang : "";
   }
 
-  // --- Debug (POC) : ?debug=1 sur l'un des deux sites, propagé à l'autre
+  // --- Debug : ?debug=1 sur l'un des deux sites, propagé à l'autre
   // via le payload. Affiche un panneau de mesures en bas de l'écran.
   let DEBUG = false;
   let debugPanel = null;
@@ -221,7 +221,7 @@
   // site cible (cas des Pages statiques). L'URL doit être EXACTEMENT celle
   // de la navigation réelle (le fragment du payload n'est pas envoyé au
   // serveur). Comme la page est un fichier unique tout-inline (cf.
-  // build-poc), document prefetché = zéro requête réseau à l'arrivée.
+  // tools/build.mjs), document prefetché = zéro requête réseau à l'arrivée.
   function addPrefetchRule() {
     if (!SPEC_RULES) return;
     const script = document.createElement("script");
