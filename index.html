@@ -28,16 +28,11 @@
   <style>
     html { background: #0b0e0c; }
   </style>
-  <script>
-    // Synchrone, avant le CSS/JS externe : si on arrive via le swipe
-    // (payload transmis dans window.name, pas dans l'URL), masquer tout
-    // de suite pour éviter tout flash avant que drag-swipe.js repositionne
-    // le scroll. Lecture seule ici — le nettoyage définitif se fait dans
-    // drag-swipe.js (handleArrival), une seule fois.
-    if (window.name && window.name.indexOf('"from":"drag"') !== -1) {
-      document.documentElement.style.visibility = "hidden";
-    }
-  </script>
+  <!-- Bloque le premier rendu jusqu'à ce que #render-ready (après les
+       scripts, en fin de body) soit parsé : le premier frame peint contient
+       donc déjà le contenu rendu par JS et la position de scroll d'arrivée.
+       Chromium 124+ ; ignoré ailleurs. -->
+  <link rel="expect" href="#render-ready" blocking="render" />
 </head>
 <body>
   <header class="site-bar">
@@ -50,5 +45,6 @@
   <script src="scripts/content.js"></script>
   <script src="scripts/lang-switch.js"></script>
   <script src="scripts/drag-swipe.js"></script>
+  <div id="render-ready" hidden></div>
 </body>
 </html>

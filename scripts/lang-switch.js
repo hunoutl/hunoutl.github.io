@@ -54,9 +54,14 @@ function toggleLanguage() {
   }, 180);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function initLang() {
   renderFloors(currentLang);
   updateLangButton();
   updateMirrorHint();
   document.getElementById("lang-switch").addEventListener("click", toggleLanguage);
-});
+}
+
+// Script en fin de <body> : rendu immédiat, pendant le parsing, pour que
+// le contenu existe dès le premier frame peint (cf. drag-swipe.js).
+if (document.getElementById("floors")) initLang();
+else document.addEventListener("DOMContentLoaded", initLang);

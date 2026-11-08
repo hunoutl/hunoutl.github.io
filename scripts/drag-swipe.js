@@ -1,6 +1,6 @@
 // Glissement horizontal → bascule vers le site miroir, sur l'étage
-// équivalent. Même fichier sur les deux sites, seuls MIRROR_ORIGIN,
-// MIRROR_*_URL et NEIGHBOR_DIRECTION changent.
+// équivalent. Même fichier sur les deux sites, seuls MIRROR_URL
+// et NEIGHBOR_DIRECTION changent.
 //
 // Principe anti-flash : un iframe caché du site miroir est préchargé
 // et gardé synchronisé (scroll) en continu. Pendant le drag, on fait
@@ -10,11 +10,20 @@
 // n'est déclenchée qu'une fois l'iframe déjà en pleine couverture de
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
-  const MIRROR_ORIGIN = "https://hunoutl.gitlab.io";
-  // Le préchargement des ressources du miroir (CSS/JS/photo) se fait
-  // désormais via des <link rel="prefetch"> statiques dans le <head>,
-  // vus par le navigateur dès le scanner de préchargement — bien plus tôt
-  // que ce que ce script pourrait déclencher lui-même.
+  // URL de base du site miroir (avec slash final). tools/build-poc.mjs
+  // réécrit cette ligne pour les tests locaux / le déploiement sous /poc/.
+  const MIRROR_URL = "https://hunoutl.gitlab.io/";
+  const MIRROR_ORIGIN = new URL(MIRROR_URL).origin;
+  // Payload d'arrivée transmis dans le fragment d'URL : "#~sw.<scrollY>.<lang>.<flags>".
+  // Pas window.name : Firefox (88+) et Safari le vident sur toute
+  // navigation cross-site — github.io et gitlab.io sont deux sites
+  // distincts (Public Suffix List). Le fragment ne correspond à aucun id
+  // d'élément, donc pas de scroll d'ancre natif ; il est retiré de l'URL
+  // (replaceState) dès la lecture.
+  const PAYLOAD_PREFIX = "#~sw.";
+  const FLAG_USER_ACTIVATION = 1;
+  const FLAG_DEBUG = 2;
+  const ARRIVAL_KEY = "swipeArrival";
   // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
   // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
   // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).
@@ -79,10 +88,29 @@
     return Math.min(1, Math.max(0, window.scrollY / max));
   }
 
+  // Hauteur réelle de "100vh" sur CETTE page (sur mobile : viewport sans
+  // la barre d'adresse). Dans l'iframe, 100vh vaudrait la hauteur de
+  // l'iframe — différente dès que la barre d'adresse bouge — et les étages
+  // en min-height:100vh n'auraient pas la même hauteur dans l'aperçu que
+  // sur la vraie page d'arrivée (contenu décalé = "saut" à la bascule).
+  // L'iframe reçoit donc cette valeur et l'applique via --vh (cf. CSS).
+  let vhProbe = null;
+  function measureVh() {
+    if (!vhProbe) {
+      vhProbe = document.createElement("div");
+      vhProbe.style.cssText = "position:absolute;top:0;left:-9999px;width:1px;height:100vh;visibility:hidden;pointer-events:none";
+      document.body.appendChild(vhProbe);
+    }
+    return vhProbe.offsetHeight;
+  }
+
   function syncMirrorFrameScroll() {
     if (!mirrorFrame || !mirrorFrameReady) return;
     const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
-    mirrorFrame.contentWindow.postMessage({ type: "sync-scroll", scrollY: window.scrollY, lang }, MIRROR_ORIGIN);
+    mirrorFrame.contentWindow.postMessage(
+      { type: "sync-scroll", scrollY: window.scrollY, lang, vh: measureVh() },
+      MIRROR_ORIGIN
+    );
   }
 
   // Partagé par l'arrivée réelle (handleArrival) et l'aperçu synchronisé
@@ -103,39 +131,100 @@
     }
   }
 
-  let lastSpecSf = null;
-  let lastSpecFloor = null;
-
-  function roundSf(sf) {
-    return Math.round(sf * 100) / 100;
+  function langNow() {
+    return typeof currentLang !== "undefined" ? currentLang : "";
   }
 
-  // Speculation Rules API (Chromium) : en plus de l'iframe, on pré-rend
-  // aussi la vraie page cible en tâche de fond, pour que la navigation
-  // réelle déclenchée après coup ait, elle aussi, le maximum de chances
-  // d'être instantanée (là où le navigateur le supporte).
-  function updateSpeculation() {
-    if (!floors.length) return;
-    const sf = roundSf(scrollFraction());
-    if (sf === lastSpecSf && currentFloorId === lastSpecFloor) return;
-    lastSpecSf = sf;
-    lastSpecFloor = currentFloorId;
-    const url = `${MIRROR_ORIGIN}/#${currentFloorId}`;
-    let script = document.getElementById("mirror-speculation-rules");
-    if (!script) {
-      script = document.createElement("script");
-      script.type = "speculationrules";
-      script.id = "mirror-speculation-rules";
-      document.head.appendChild(script);
+  // --- Debug (POC) : ?debug=1 sur l'un des deux sites, propagé à l'autre
+  // via le payload. Affiche un panneau de mesures en bas de l'écran.
+  let DEBUG = false;
+  let debugPanel = null;
+  const debugLines = [];
+
+  function initDebug(arrival) {
+    const params = new URLSearchParams(location.search);
+    try {
+      if (params.get("debug") === "0") sessionStorage.removeItem("swipeDebug");
+      else if (params.has("debug") || (arrival && arrival.debug)) sessionStorage.setItem("swipeDebug", "1");
+      DEBUG = sessionStorage.getItem("swipeDebug") === "1";
+    } catch (err) {
+      DEBUG = params.has("debug");
     }
+  }
+
+  function debugLog(line) {
+    if (!DEBUG || isEmbedded) return;
+    debugLines.push(line);
+    if (!debugPanel) {
+      debugPanel = document.createElement("pre");
+      debugPanel.id = "swipe-debug";
+      debugPanel.style.cssText =
+        "position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;margin:0;padding:8px 10px;" +
+        "font:11px/1.4 ui-monospace,monospace;background:rgba(0,0,0,.82);color:#7CFC9A;" +
+        "border-radius:6px;white-space:pre-wrap;pointer-events:none;max-height:40vh;overflow:hidden";
+      document.body.appendChild(debugPanel);
+    }
+    debugPanel.textContent = debugLines.slice(-14).join("\n");
+  }
+
+  function reportArrivalMetrics(arrival) {
+    if (!DEBUG || isEmbedded) return;
+    const nav = performance.getEntriesByType("navigation")[0];
+    const ref = document.referrer ? new URL(document.referrer).host : "—";
+    debugLog(`[${location.host}] arrivée: ${arrival ? "swipe" : "directe"} · referrer ${ref}`);
+    if (arrival) {
+      debugLog(`userActivation au départ: ${arrival.ua === null ? "n/a" : arrival.ua}`);
+      debugLog(`innerHeight départ ${arrival.innerHeight} → arrivée ${window.innerHeight} · 100vh ${measureVh()}`);
+    }
+    if (nav) {
+      debugLog(
+        `deliveryType="${nav.deliveryType ?? "n/a"}" · type=${nav.type} · ` +
+          `TTFB ${Math.round(nav.responseStart - nav.startTime)}ms · DCL ${Math.round(nav.domContentLoadedEventEnd)}ms`
+      );
+    }
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (e.name === "first-contentful-paint") debugLog(`FCP ${Math.round(e.startTime)}ms`);
+        }
+      }).observe({ type: "paint", buffered: true });
+    } catch (err) {
+      /* paint timing non supporté */
+    }
+    const nrr = nav && nav.notRestoredReasons;
+    if (nrr) {
+      const reasons = [];
+      const walk = (n) => {
+        if (!n) return;
+        (n.reasons || []).forEach((r) => reasons.push(`${n.src || n.url || "main"}: ${r.reason}`));
+        (n.children || []).forEach(walk);
+      };
+      walk(nrr);
+      if (reasons.length) debugLog(`bfcache refusé: ${reasons.join(" | ")}`);
+    }
+    const specOk = HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules");
+    debugLog(`speculationrules: ${specOk ? "oui" : "non"} · scrollY ${Math.round(window.scrollY)}`);
+  }
+
+  // Speculation Rules : PREFETCH (et non prerender) du document miroir.
+  // Le prerender est interdit en cross-site ; le prefetch cross-site est
+  // autorisé par Chrome tant que l'utilisateur n'a pas de cookie sur le
+  // site cible (cas des Pages statiques). L'URL doit être EXACTEMENT celle
+  // de la navigation réelle (le fragment du payload n'est pas envoyé au
+  // serveur). Comme la page est un fichier unique tout-inline (cf.
+  // build-poc), document prefetché = zéro requête réseau à l'arrivée.
+  function addPrefetchRule() {
+    if (!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"))) return;
+    const script = document.createElement("script");
+    script.type = "speculationrules";
     script.textContent = JSON.stringify({
-      prerender: [{ source: "list", urls: [url], eagerness: "immediate" }],
+      prefetch: [{ source: "list", urls: [MIRROR_URL], eagerness: "immediate", referrer_policy: "strict-origin-when-cross-origin" }],
     });
+    document.head.appendChild(script);
   }
 
   function onScroll() {
     currentFloorId = currentFloorFromScroll();
-    updateSpeculation();
     syncMirrorFrameScroll();
     updateFallbackLinks();
   }
@@ -172,23 +261,57 @@
     }
   }
 
+  // Retour par l'historique (bfcache) : si on est arrivé ici PAR UN SWIPE
+  // depuis le miroir, que l'entrée d'historique n'a pas bougé et que la
+  // position/langue sont restées celles de l'arrivée, alors la page miroir
+  // précédente est exactement dans l'état voulu : history.back() la
+  // restaure depuis le bfcache, sans aucun chargement. Aucun canal ne
+  // permet de lui transmettre une NOUVELLE position (stockage partitionné
+  // par site), d'où la condition "pas bougé".
+  function arrivalRecord() {
+    try {
+      return JSON.parse(sessionStorage.getItem(ARRIVAL_KEY) || "null");
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function canReturnViaHistory() {
+    const rec = arrivalRecord();
+    return (
+      !!rec &&
+      rec.len === history.length &&
+      rec.lang === langNow() &&
+      Math.abs(window.scrollY - rec.y) <= 4 &&
+      document.referrer.startsWith(MIRROR_ORIGIN)
+    );
+  }
+
+  let backFallbackTimer = null;
+
   function goToMirrorReal() {
-    updateSpeculation();
-    const scrollY = window.scrollY;
-    const floorId = lastSpecFloor !== null ? lastSpecFloor : currentFloorId;
-    // window.name survit à une navigation complète (même cross-domaine)
-    // et n'est lisible que par du JS : ça garde l'URL propre, pas de
-    // paramètre technique visible/partageable dans la barre d'adresse.
-    // Important : PAS de #floorId ici — le scroll natif du navigateur
-    // sur l'ancre viendrait écraser le repositionnement précis (scrollY)
-    // qu'on s'apprête à faire nous-mêmes à l'arrivée.
-    // La langue de la page de départ voyage aussi, pour que le site
-    // d'arrivée affiche la même langue plutôt que sa préférence propre
-    // (typeof-guard : lang-switch.js est chargé avant, mais on ne
-    // suppose rien s'il venait à manquer).
-    const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
-    window.name = JSON.stringify({ from: "drag", scrollY, floorId, lang });
-    window.location.href = `${MIRROR_ORIGIN}/`;
+    const ua = navigator.userActivation ? navigator.userActivation.isActive : null;
+    if (canReturnViaHistory()) {
+      debugLog(`départ: history.back() (bfcache) · userActivation ${ua}`);
+      history.back();
+      // Filet de sécurité : si rien ne s'est passé (entrée introuvable...),
+      // navigation classique. Annulé au pagehide (sinon le timer, gelé
+      // avec la page dans le bfcache, se déclencherait à son retour).
+      backFallbackTimer = window.setTimeout(navigateWithPayload, 700, ua);
+      return;
+    }
+    navigateWithPayload(ua);
+  }
+
+  function navigateWithPayload(ua) {
+    try {
+      sessionStorage.removeItem(ARRIVAL_KEY);
+    } catch (err) {
+      /* stockage indisponible */
+    }
+    const flags = (ua ? FLAG_USER_ACTIVATION : 0) | (DEBUG ? FLAG_DEBUG : 0);
+    debugLog(`départ: navigation · userActivation ${ua}`);
+    window.location.href = `${MIRROR_URL}${PAYLOAD_PREFIX}${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
   }
 
   function settleCommitted(durationMs) {
@@ -409,12 +532,12 @@
     abortDrag();
   }
 
-  // Le lien de secours (ex. "plain-language version") n'est PAS
-  // imbriqué dans un étage : son href doit suivre l'étage courant en
-  // continu, pas être figé une fois pour toutes sur "hero" au chargement.
+  // Le lien de secours (ex. "plain-language version") n'est PAS imbriqué
+  // dans un étage : son href doit suivre l'étage courant en continu,
+  // pas être figé une fois pour toutes sur "hero" au chargement.
   function updateFallbackLinks() {
     document.querySelectorAll("[data-mirror-link]").forEach((el) => {
-      el.href = `${MIRROR_ORIGIN}/#${currentFloorId}`;
+      el.href = `${MIRROR_URL}#${currentFloorId}`;
     });
   }
 
@@ -422,7 +545,7 @@
     if (isEmbedded) return; // pas d'aperçu récursif dans un aperçu
     const iframe = document.createElement("iframe");
     iframe.id = "mirror-frame";
-    iframe.src = `${MIRROR_ORIGIN}/?embedded=1`;
+    iframe.src = `${MIRROR_URL}?embedded=1`;
     iframe.setAttribute("aria-hidden", "true");
     iframe.tabIndex = -1;
     // Largeur/hauteur en px exacts (pas 100vw/100vh en CSS) : sur mobile,
@@ -439,75 +562,132 @@
     });
     document.body.appendChild(iframe);
     mirrorFrame = iframe;
+    // La barre d'adresse mobile qui se replie/réapparaît change
+    // innerHeight : l'iframe doit suivre, sinon elle ne couvre plus tout
+    // l'écran (ou déborde) au moment de la bascule.
+    window.addEventListener("resize", () => {
+      iframe.style.width = `${window.innerWidth}px`;
+      iframe.style.height = `${window.innerHeight}px`;
+      if (!dragging && !committed) {
+        iframe.style.transition = "none";
+        iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+      }
+      syncMirrorFrameScroll();
+    });
   }
 
   function listenForSync() {
     window.addEventListener("message", (e) => {
       if (e.origin !== MIRROR_ORIGIN) return;
       const data = e.data;
-      if (!data || data.type !== "sync-scroll") return;
+      if (!data) return;
+      if (data.type !== "sync-scroll") return;
       syncIncomingLang(data.lang);
+      if (typeof data.vh === "number" && data.vh > 0) {
+        document.documentElement.style.setProperty("--vh", `${data.vh}px`);
+      }
       const max = document.documentElement.scrollHeight;
       if (typeof data.scrollY === "number") window.scrollTo(0, Math.min(data.scrollY, max));
     });
   }
 
-  // window.name transporte la position exacte (scrollY) d'un domaine à
-  // l'autre sans passer par l'URL. On la lit puis on la vide tout de
-  // suite : sinon elle resterait attachée à l'onglet et fausserait un
-  // futur rechargement "normal" (hors drag) de cette même page.
+  // Arrivée par swipe : lecture SYNCHRONE du payload (fragment d'URL),
+  // pendant le parsing, avant le tout premier rendu. La page n'est plus
+  // jamais masquée (visibility:hidden) : le premier frame peint est
+  // directement le bon contenu, à la bonne position. Masquer retardait le
+  // premier rendu de contenu, ce qui laissait voir le fond vide — en
+  // particulier sur Chrome Android, où le "paint holding" cross-origin
+  // (qui garderait l'ancienne page affichée) est désactivé par défaut.
   let arrivalScrollY = null;
+
+  function readArrivalPayload() {
+    const h = location.hash;
+    if (!h.startsWith(PAYLOAD_PREFIX)) return null;
+    const [y, lang, flags, vh] = h.slice(PAYLOAD_PREFIX.length).split(".");
+    history.replaceState(history.state, "", location.pathname + location.search);
+    const f = Number(flags) || 0;
+    return {
+      scrollY: Number(y) || 0,
+      lang: lang || "",
+      ua: (f & FLAG_USER_ACTIVATION) !== 0,
+      debug: (f & FLAG_DEBUG) !== 0,
+      innerHeight: Number(vh) || null,
+    };
+  }
 
   function applyArrivalScroll() {
     if (arrivalScrollY === null) return;
     window.scrollTo(0, Math.min(arrivalScrollY, document.documentElement.scrollHeight));
   }
 
-  function handleArrival() {
-    let payload = null;
-    if (window.name) {
+  function handleArrival(arrival) {
+    if (!arrival) {
       try {
-        payload = JSON.parse(window.name);
+        sessionStorage.removeItem(ARRIVAL_KEY);
       } catch (err) {
-        payload = null;
+        /* stockage indisponible */
       }
-      window.name = "";
+      return;
     }
-    if (!payload || payload.from !== "drag") return;
-    syncIncomingLang(payload.lang);
-
-    if (typeof payload.scrollY === "number") {
-      arrivalScrollY = payload.scrollY;
-      applyArrivalScroll();
+    syncIncomingLang(arrival.lang);
+    arrivalScrollY = arrival.scrollY;
+    applyArrivalScroll();
+    try {
+      sessionStorage.setItem(
+        ARRIVAL_KEY,
+        JSON.stringify({ len: history.length, y: Math.round(window.scrollY), lang: langNow() })
+      );
+    } catch (err) {
+      /* stockage indisponible */
     }
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  // Remet les calques dans l'état "page normale", sans animation. Appelé
+  // au pagehide : si la page part dans le bfcache, c'est cet état qui sera
+  // ré-affiché à la restauration (et non l'état "glissée hors écran").
+  function resetLayersInstant() {
+    dragging = false;
+    committed = false;
+    document.body.classList.remove("settling", "dragging");
+    document.body.classList.add("no-anim");
+    document.documentElement.style.setProperty("--drag-x", "0px");
+    if (mirrorFrame) {
+      mirrorFrame.style.transition = "none";
+      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+    }
+  }
+
+  function init() {
+    const arrival = isEmbedded ? null : readArrivalPayload();
+    initDebug(arrival);
     floors = Array.from(document.querySelectorAll("[data-floor-id]"));
     listenForSync();
     document.addEventListener("floors-rendered", refreshFloors);
+    handleArrival(arrival);
     onScroll();
-    handleArrival();
-    // Un redimensionnement tardif (image/police qui finit de charger après
-    // DOMContentLoaded) peut agrandir légèrement la page après ce premier
-    // positionnement, décalant la position visible ("elle remonte") une
-    // fois la page révélée. On reste caché jusqu'au 'load' complet, où l'on
-    // réapplique la même position avec la mise en page définitive.
-    if (document.readyState === "complete") {
-      applyArrivalScroll();
-      document.documentElement.style.visibility = "visible";
-    } else {
-      window.addEventListener("load", () => {
-        applyArrivalScroll();
-        document.documentElement.style.visibility = "visible";
-      });
-    }
+    reportArrivalMetrics(arrival);
+    // Filet de sécurité si la mise en page bouge encore d'ici le load
+    // (normalement non : tout est inline, photo en data URI avec
+    // width/height, polices système).
+    window.addEventListener("load", applyArrivalScroll, { once: true });
+
+    window.addEventListener("pagehide", () => {
+      window.clearTimeout(backFallbackTimer);
+      resetLayersInstant();
+    });
+    window.addEventListener("pageshow", (e) => {
+      if (!e.persisted) return;
+      debugLog(`[${location.host}] restaurée depuis le bfcache · scrollY ${Math.round(window.scrollY)}`);
+      syncMirrorFrameScroll();
+      requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("no-anim")));
+    });
 
     if (reduceMotion || isEmbedded) {
       document.body.classList.add("reduced-motion");
       return; // pas de drag élastique, seulement les liens de secours
     }
 
+    addPrefetchRule();
     createMirrorFrame();
 
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -551,5 +731,11 @@
       committed = true;
       settleCommitted(BUTTON_SETTLE_MS);
     });
-  });
+  }
+
+  // Script placé en fin de <body> : le DOM utile existe déjà, on
+  // initialise tout de suite (pas d'attente de DOMContentLoaded, qui
+  // laisserait au navigateur une occasion de peindre avant).
+  if (document.getElementById("floors")) init();
+  else document.addEventListener("DOMContentLoaded", init);
 })();
