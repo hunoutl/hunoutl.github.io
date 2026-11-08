@@ -672,8 +672,11 @@
   }
 
   // Remet les calques dans l'état "page normale", sans animation. Appelé
-  // au pagehide : si la page part dans le bfcache, c'est cet état qui sera
-  // ré-affiché à la restauration (et non l'état "glissée hors écran").
+  // au pageshow d'une restauration bfcache (avant le premier rendu de la
+  // page restaurée), JAMAIS au pagehide : le navigateur peut encore peindre
+  // un frame de la page de départ après le pagehide — la remettre en état
+  // "normal" à ce moment-là faisait réapparaître le départ en flash juste
+  // avant l'arrivée.
   function resetLayersInstant() {
     dragging = false;
     committed = false;
@@ -702,10 +705,10 @@
 
     window.addEventListener("pagehide", () => {
       window.clearTimeout(backFallbackTimer);
-      resetLayersInstant();
     });
     window.addEventListener("pageshow", (e) => {
       if (!e.persisted) return;
+      resetLayersInstant();
       debugLog(`[${location.host}] restaurée depuis le bfcache · scrollY ${Math.round(window.scrollY)}`);
       syncMirrorFrameScroll();
       requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("no-anim")));
