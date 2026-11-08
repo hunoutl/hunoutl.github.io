@@ -53,7 +53,7 @@ body {
      fait par fraction (0–1), donc un léger écart de hauteur naturelle
      entre les deux versions du même étage n'introduit pas de décalage
      perceptible.  */
-  min-height: 100vh;
+  min-height: var(--vh, 100vh); /* --vh : fixé dans l'iframe miroir, cf. drag-swipe.js */
   overflow-x: hidden;
   display: flex;
   align-items: center;
@@ -325,4 +325,10 @@ h2 {
   .floor-inner {
     transition: none;
   }
+}
+
+/* Remise à zéro instantanée des calques (pagehide → bfcache), cf. drag-swipe.js */
+body.no-anim .floor-inner,
+body.no-anim #mirror-frame {
+  transition: none !important;
 }
