@@ -33,7 +33,6 @@
   const SPEC_RULES = !!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"));
   const FLAG_USER_ACTIVATION = 1;
   const FLAG_DEBUG = 2;
-  const ARRIVAL_KEY = "swipeArrival";
   // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
   // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
   // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).
@@ -271,54 +270,11 @@
     }
   }
 
-  // Retour par l'historique (bfcache) : si on est arrivé ici PAR UN SWIPE
-  // depuis le miroir, que l'entrée d'historique n'a pas bougé et que la
-  // position/langue sont restées celles de l'arrivée, alors la page miroir
-  // précédente est exactement dans l'état voulu : history.back() la
-  // restaure depuis le bfcache, sans aucun chargement. Aucun canal ne
-  // permet de lui transmettre une NOUVELLE position (stockage partitionné
-  // par site), d'où la condition "pas bougé".
-  function arrivalRecord() {
-    try {
-      return JSON.parse(sessionStorage.getItem(ARRIVAL_KEY) || "null");
-    } catch (err) {
-      return null;
-    }
-  }
-
-  function canReturnViaHistory() {
-    const rec = arrivalRecord();
-    return (
-      !!rec &&
-      rec.len === history.length &&
-      rec.lang === langNow() &&
-      Math.abs(window.scrollY - rec.y) <= 4 &&
-      document.referrer.startsWith(MIRROR_ORIGIN)
-    );
-  }
-
-  let backFallbackTimer = null;
-
+  // Toujours une vraie navigation (servie par le prefetch). Un essai de
+  // retour via history.back() + bfcache a été abandonné : la restauration
+  // bfcache clignotait sur mobile.
   function goToMirrorReal() {
     const ua = navigator.userActivation ? navigator.userActivation.isActive : null;
-    if (canReturnViaHistory()) {
-      debugLog(`départ: history.back() (bfcache) · userActivation ${ua}`);
-      history.back();
-      // Filet de sécurité : si rien ne s'est passé (entrée introuvable...),
-      // navigation classique. Annulé au pagehide (sinon le timer, gelé
-      // avec la page dans le bfcache, se déclencherait à son retour).
-      backFallbackTimer = window.setTimeout(navigateWithPayload, 700, ua);
-      return;
-    }
-    navigateWithPayload(ua);
-  }
-
-  function navigateWithPayload(ua) {
-    try {
-      sessionStorage.removeItem(ARRIVAL_KEY);
-    } catch (err) {
-      /* stockage indisponible */
-    }
     const flags = (ua ? FLAG_USER_ACTIVATION : 0) | (DEBUG ? FLAG_DEBUG : 0);
     const payload = `${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
     debugLog(`départ: navigation (${SPEC_RULES ? "window.name" : "fragment"}) · userActivation ${ua}`);
@@ -650,30 +606,15 @@
   }
 
   function handleArrival(arrival) {
-    if (!arrival) {
-      try {
-        sessionStorage.removeItem(ARRIVAL_KEY);
-      } catch (err) {
-        /* stockage indisponible */
-      }
-      return;
-    }
+    if (!arrival) return;
     syncIncomingLang(arrival.lang);
     arrivalScrollY = arrival.scrollY;
     applyArrivalScroll();
-    try {
-      sessionStorage.setItem(
-        ARRIVAL_KEY,
-        JSON.stringify({ len: history.length, y: Math.round(window.scrollY), lang: langNow() })
-      );
-    } catch (err) {
-      /* stockage indisponible */
-    }
   }
 
   // Remet les calques dans l'état "page normale", sans animation. Appelé
-  // au pageshow d'une restauration bfcache (avant le premier rendu de la
-  // page restaurée), JAMAIS au pagehide : le navigateur peut encore peindre
+  // au pageshow d'une restauration bfcache (bouton Retour du navigateur),
+  // avant le premier rendu de la page restaurée — JAMAIS au pagehide : le navigateur peut encore peindre
   // un frame de la page de départ après le pagehide — la remettre en état
   // "normal" à ce moment-là faisait réapparaître le départ en flash juste
   // avant l'arrivée.
@@ -703,9 +644,6 @@
     // width/height, polices système).
     window.addEventListener("load", applyArrivalScroll, { once: true });
 
-    window.addEventListener("pagehide", () => {
-      window.clearTimeout(backFallbackTimer);
-    });
     window.addEventListener("pageshow", (e) => {
       if (!e.persisted) return;
       resetLayersInstant();
