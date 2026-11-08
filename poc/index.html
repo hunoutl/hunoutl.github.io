@@ -1,0 +1,1472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>hunoutl — AI/HPC Engineer</title>
+  <meta name="description" content="Léo Hunout, AI/HPC infrastructure engineer. Swipe right for the plain-language version." />
+  <meta property="og:title" content="hunoutl — AI/HPC Engineer" />
+  <meta property="og:description" content="4+ years building large-scale AI/HPC compute infrastructure." />
+  <style>
+:root {
+  --drag-x: 0px;
+  --bg: #0b0e0c;
+  --ink: #d6f5df;
+  --accent: #3ddc84;
+  --muted: #6f9e80;
+  --line: #1c2620;
+  /* Même valeur des deux côtés Façade/Machine : c'est ce qui garantit
+     que le bandeau tombe exactement à la même hauteur dans l'aperçu
+     iframe pendant le drag. */
+  --bar-height: 3.25rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0; /* Chrome/Safari, aussi masqué à l'intérieur de l'iframe miroir */
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
+  line-height: 1.6;
+  /* pan-y : scroll vertical natif (fluide, avec inertie). Le swipe
+     horizontal est géré par des Touch Events dédiés (cf. drag-swipe.js)
+     qui interceptent proprement le geste — voir le commentaire détaillé
+     là-bas avant de retoucher à cette valeur. */
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+  overflow-x: hidden;
+}
+
+.floor {
+  /* min-height (pas height fixe) : un étage court reste calé sur un
+     plein écran, mais un étage avec beaucoup de contenu (ex.
+     expériences) grandit automatiquement au lieu d'être coupé avec un
+     ascenseur interne. Le raccord de scroll entre Façade et Machine se
+     fait par fraction (0–1), donc un léger écart de hauteur naturelle
+     entre les deux versions du même étage n'introduit pas de décalage
+     perceptible.  */
+  min-height: var(--vh, 100vh); /* --vh : fixé dans l'iframe miroir, cf. drag-swipe.js */
+  overflow-x: hidden;
+  display: flex;
+  align-items: center;
+  padding: 4rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background-image: linear-gradient(rgba(61, 220, 132, 0.03) 1px, transparent 1px);
+  background-size: 100% 2px;
+}
+
+/* Étage avec beaucoup de contenu : hauteur fixe (même valeur des deux
+   côtés Façade/Machine) plutôt qu'une mesure dynamique en JS — celle-ci
+   provoquait un léger redimensionnement après l'affichage de la page
+   (donc un flash) le temps que l'échange avec le site miroir se termine.
+   Valeurs mesurées en largeur mobile (390px, l'un des deux textes y
+   passe à plus de lignes qu'en desktop) + marge, pas seulement en
+   desktop — sinon l'écart réapparaît sur mobile dès que le retour à la
+   ligne change. */
+.floor[data-floor-id="experiences"] {
+  min-height: 2350px;
+}
+
+/* Même principe pour "compétences" : les deux tons ont un contenu de
+   longueur assez différente (liste vs bloc YAML) pour créer un écart de
+   hauteur notable, ce qui décalait la correspondance de fraction de
+   scroll entre les deux sites dès qu'on passait de l'un à l'autre. */
+.floor[data-floor-id="competences"] {
+  min-height: 860px;
+}
+
+/* Idem pour le hero : le texte d'intro n'a pas la même longueur en FR/EN
+   selon le ton, ce qui décalait déjà légèrement tous les étages suivants. */
+.floor[data-floor-id="hero"] {
+  min-height: 950px;
+}
+
+/* "À propos" n'avait jusqu'ici aucune hauteur forcée : sur mobile, le
+   texte anglais (plus long à cette largeur) déborde du premier écran
+   alors que la version FR y tient encore, ce qui décale tout le reste
+   du scroll par fraction. */
+.floor[data-floor-id="apropos"] {
+  min-height: 760px;
+}
+
+.floor-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  transform: translateX(var(--drag-x));
+  transition: transform 0.05s linear;
+}
+
+.floor[data-floor-id="hero"] .floor-inner {
+  max-width: 800px;
+}
+
+.hero-layout {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.hero-text {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .hero-layout {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+body.dragging .floor-inner,
+body.dragging #mirror-frame {
+  transition: none;
+}
+
+body.dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+body.settling .floor-inner {
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#floors {
+  padding-top: var(--bar-height);
+  transition: opacity 0.18s ease;
+}
+
+#floors.lang-fading {
+  opacity: 0;
+}
+
+#mirror-frame {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: none;
+  z-index: 60;
+  pointer-events: none;
+  /* Promeut l'iframe sur son propre calque GPU dès sa création, pas au
+     premier vrai drag : sans ça, le tout premier transform anime un
+     calque pas encore rasterisé, et la peinture (dont le bandeau du
+     haut) peut arriver en retard d'une frame ou deux — constaté comme
+     "pas de bandeau au premier essai, mais oui au deuxième". */
+  will-change: transform;
+  background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
+}
+
+.prompt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.prompt::before {
+  content: "";
+}
+
+.profile-photo {
+  display: block;
+  flex-shrink: 0;
+  width: 176px;
+  height: 176px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+}
+
+.lede {
+  color: var(--ink);
+}
+
+.quick-contacts {
+  margin-top: 2rem;
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.quick-contacts a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.quick-contacts a:hover {
+  opacity: 1;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.timeline article {
+  margin-bottom: 2rem;
+}
+
+.timeline h3 {
+  margin: 0 0 0.25rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.skills {
+  list-style: none;
+  padding: 0;
+}
+
+.skills li {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.95rem;
+}
+
+.skills li strong {
+  color: var(--accent);
+}
+
+.cv-download {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  border-radius: 2px;
+}
+
+/* Bandeau plein écran plutôt que deux boutons flottants isolés : sur
+   mobile, un bouton flottant se retrouvait au-dessus du texte des
+   étages, jamais parfaitement aligné entre la page réelle et l'aperçu
+   iframe pendant le drag (fixed = relatif au viewport de CHAQUE
+   document). Un bandeau de la couleur de fond, à la même hauteur des
+   deux côtés, élimine ce décalage visuel au moment de la bascule. */
+.site-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--bar-height);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  background: var(--bg);
+}
+
+.mirror-hint,
+.lang-switch {
+  font-family: inherit;
+  font-size: 0.75rem;
+  background: transparent;
+  /* Couleur opaque pré-mélangée plutôt qu'un accent à 100% + opacity :
+     un enfant semi-transparent à l'intérieur d'un iframe cross-origin
+     soumis à un transform en continu (le drag) peut rater sa
+     recomposition sur mobile — le calque du bandeau (opaque) se
+     repeint bien, mais celui, alpha-blendé, des boutons reste parfois
+     "gelé"/invisible un instant. En restant 100% opaque ici, il n'y a
+     plus de calque semi-transparent à recomposer : plus de risque de
+     ce glitch, sur mobile comme ailleurs. */
+  border: 1px solid color-mix(in srgb, var(--accent) 75%, var(--bg));
+  color: color-mix(in srgb, var(--accent) 75%, var(--bg));
+  padding: 0.35rem 0.7rem;
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.mirror-hint:hover,
+.lang-switch:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floor-inner {
+    transition: none;
+  }
+}
+
+/* Remise à zéro instantanée des calques (pagehide → bfcache), cf. drag-swipe.js */
+body.no-anim .floor-inner,
+body.no-anim #mirror-frame {
+  transition: none !important;
+}
+</style>
+  <style>
+    html { background: #0b0e0c; }
+  </style>
+  <link rel="expect" href="#render-ready" blocking="render" />
+</head>
+<body>
+  <header class="site-bar">
+    <button id="lang-switch" class="lang-switch" type="button">FR</button>
+    <a id="mirror-hint" class="mirror-hint" data-mirror-link href="#" data-floor-id="hero"></a>
+  </header>
+
+  <main id="floors"></main>
+
+  <script>
+// Source de contenu — ton "Machine" (technique / pair), bilingue EN/FR.
+// Les ids d'étage doivent rester identiques à ceux du site miroir
+// (hunoutl.gitlab.io), c'est ce qui permet au drag-swipe de retomber
+// au bon endroit en face.
+
+// Icônes SVG inline (pas de dépendance externe) pour les liens sociaux.
+const ICON_LINKEDIN = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.03-1.85-3.03-1.86 0-2.14 1.45-2.14 2.94v5.66H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.61 0 4.28 2.38 4.28 5.48v6.26zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>`;
+const ICON_GITHUB = `<svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>`;
+const ICON_GITLAB = `<svg viewBox="0 0 24 22" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 21.6 16.2 8.7H7.8L12 21.6Z"/><path d="M4.6 8.7 3 13.6a.9.9 0 0 0 .33 1L12 21.6 4.6 8.7Z"/><path d="M4.6 8.7h3.2L6.4 2.9a.45.45 0 0 0-.86 0L4.6 8.7Z"/><path d="M19.4 8.7 21 13.6a.9.9 0 0 1-.33 1L12 21.6l7.4-12.9Z"/><path d="M19.4 8.7h-3.2l1.4-5.8a.45.45 0 0 1 .86 0l1 3.87v1.93Z"/></svg>`;
+
+const FLOORS = [
+  {
+    id: "hero",
+    label: "root",
+    en: () => `
+      <p class="prompt">leo@hpc:~$ whoami</p>
+      <div class="hero-layout">
+        <img class="profile-photo" src="data:image/png;base64,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" alt="Photo of Léo Hunout" width="176" height="176" />
+        <div class="hero-text">
+          <h1>hunoutl — AI/HPC Engineer</h1>
+          <p class="subtitle">uptime: 4+ years · large-scale AI &amp; HPC infra</p>
+          <p class="lede">
+            Multi-node GPU training, supercomputer ops, hybrid cloud/on-prem
+            orchestration. Distributed training internals (FSDP/DDP/ZeRO,
+            NCCL, tensor/pipeline parallelism), Slurm, Kubernetes, MPI/OpenMP.
+          </p>
+          <div class="quick-contacts">
+            <a href="https://www.linkedin.com/in/leo-hunout" target="_blank" rel="noopener" aria-label="LinkedIn" title="LinkedIn">${ICON_LINKEDIN}</a>
+            <a href="https://github.com/hunoutl" target="_blank" rel="noopener" aria-label="GitHub" title="GitHub">${ICON_GITHUB}</a>
+            <a href="https://gitlab.com/hunoutl" target="_blank" rel="noopener" aria-label="GitLab" title="GitLab">${ICON_GITLAB}</a>
+          </div>
+          <a class="cv-download" href="assets/CV_HUNOUT_LEO_2604.pdf" download>./download_cv.pdf</a>
+        </div>
+      </div>
+    `,
+    fr: () => `
+      <p class="prompt">leo@hpc:~$ whoami</p>
+      <div class="hero-layout">
+        <img class="profile-photo" src="data:image/png;base64,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" alt="Photo de Léo Hunout" width="176" height="176" />
+        <div class="hero-text">
+          <h1>hunoutl — Ingénieur AI/HPC</h1>
+          <p class="subtitle">uptime : 4+ ans · infra IA &amp; HPC à grande échelle</p>
+          <p class="lede">
+            Entraînement GPU multi-nœud, exploitation de supercalculateurs,
+            orchestration cloud/on-prem hybride. Internals de l'entraînement
+            distribué (FSDP/DDP/ZeRO, NCCL, parallélisme tenseur/pipeline),
+            Slurm, Kubernetes, MPI/OpenMP.
+          </p>
+          <div class="quick-contacts">
+            <a href="https://www.linkedin.com/in/leo-hunout" target="_blank" rel="noopener" aria-label="LinkedIn" title="LinkedIn">${ICON_LINKEDIN}</a>
+            <a href="https://github.com/hunoutl" target="_blank" rel="noopener" aria-label="GitHub" title="GitHub">${ICON_GITHUB}</a>
+            <a href="https://gitlab.com/hunoutl" target="_blank" rel="noopener" aria-label="GitLab" title="GitLab">${ICON_GITLAB}</a>
+          </div>
+          <a class="cv-download" href="assets/CV_HUNOUT_LEO_2604.pdf" download>./telecharger_cv.pdf</a>
+        </div>
+      </div>
+    `,
+  },
+  {
+    id: "apropos",
+    label: "about",
+    en: () => `
+      <p class="prompt">leo@hpc:~$ cat about.md</p>
+      <h2>about</h2>
+      <p>
+        Optimizing GPU clusters is only half the job — the other half is
+        making that compute usable by people who aren't systems experts.
+        4 years supporting 3000+ researchers on Jean Zay (one of France's
+        largest supercomputers) taught me as much about NCCL tuning and
+        multi-node scaling as about writing docs and giving talks that
+        don't assume prior HPC knowledge. Currently applying the same
+        infra instincts to a tighter, quant-research context: hybrid
+        cloud/on-prem orchestration instead of national-scale clusters.
+      </p>
+    `,
+    fr: () => `
+      <p class="prompt">leo@hpc:~$ cat about.md</p>
+      <h2>about</h2>
+      <p>
+        Optimiser des clusters GPU n'est que la moitié du travail —
+        l'autre moitié consiste à rendre ce calcul utilisable par des
+        gens qui ne sont pas experts systèmes. 4 ans à supporter plus de
+        3000 chercheurs sur Jean Zay (l'un des plus gros supercalculateurs
+        français) m'ont autant appris sur le tuning NCCL et le scaling
+        multi-nœud que sur la rédaction de docs et les talks accessibles
+        sans prérequis HPC. J'applique aujourd'hui les mêmes réflexes
+        d'infra dans un contexte plus resserré, orienté recherche
+        quantitative : orchestration cloud/on-prem hybride plutôt que
+        clusters à l'échelle nationale.
+      </p>
+    `,
+  },
+  {
+    id: "experiences",
+    label: "log",
+    en: () => `
+      <p class="prompt">leo@hpc:~$ tail -f experience.log</p>
+      <h2>experience</h2>
+      <div class="timeline">
+        <article>
+          <h3>[2026-02 → now] AI/HPC Senior Consultant</h3>
+          <p class="meta">Aneo · full-time · Paris area, hybrid</p>
+          <p>
+            Hybrid cloud/on-prem infra for quant research: orchestrator
+            scheduling compute across AWS and Slurm.
+          </p>
+        </article>
+        <article>
+          <h3>[2026-02 → now] Portfolio Platform Engineer</h3>
+          <p class="meta">Capital Fund Management (CFM) · contractor · Paris, on-site</p>
+        </article>
+        <article>
+          <h3>[2025-08 → 2026-01] Sr. AI/HPC Engineer</h3>
+          <p class="meta">MINERVA European Support Centre for Scalable AI Research and Deployment · fixed-term · Saclay</p>
+          <p>Deployed and operated Dalia supercomputer — 360 PFlop/s (FP16), 72x NVIDIA GB200.</p>
+        </article>
+        <article>
+          <h3>[2024-03 → 2026-01] Artificial Intelligence Engineer</h3>
+          <p class="meta">CNRS · fixed-term · Saclay</p>
+          <p>
+            2000-user support on Jean Zay supercomputer (125 PFlop/s,
+            1456x NVIDIA H100) — password resets to LLM pre-training.
+            Installed/maintained AI &amp; HPC software stacks,
+            multi-GPU/multi-node benchmarking, trained/finetuned
+            large-scale models (BLOOM, LLaMA, ViT). PNRIA network
+            contributor. AI trainer for Fidle, DLO-JZ, Panoram'IA;
+            workshops, hackathons, AI-DevTalks.
+          </p>
+        </article>
+        <article>
+          <h3>[2025-12] Lecturer — MSc Data Science &amp; AI for Business, X-HEC</h3>
+          <p class="meta">École Polytechnique · independent · Palaiseau</p>
+        </article>
+        <article>
+          <h3>[2022-03 → 2025-09] Lecturer — Deep Learning &amp; HPC</h3>
+          <p class="meta">FIDLE · remote</p>
+        </article>
+        <article>
+          <h3>[2022-03 → 2024-02] Artificial Intelligence Engineer</h3>
+          <p class="meta">Inria · fixed-term · Saclay</p>
+          <p>Jean Zay supercomputer, previous generation — 37 PFlop/s.</p>
+        </article>
+        <article>
+          <h3>[2021-02 → 2021-08] Embedded AI Engineer (intern)</h3>
+          <p class="meta">Atos, Toulouse</p>
+          <p>
+            Embedded computer vision for real-time quality inspection:
+            YOLOv4/Faster R-CNN inference on Jetson Nano, -80% latency
+            via quantization &amp; pruning.
+          </p>
+        </article>
+        <article>
+          <h3>[2020-04 → 2020-08] Infrastructure Engineer (intern)</h3>
+          <p class="meta">SPASCIA, Ramonville-Saint-Agne</p>
+          <p>110-node ARM-SBC cluster (440 CPU cores) for async RL training — custom OS, automation, monitoring, web services.</p>
+        </article>
+      </div>
+    `,
+    fr: () => `
+      <p class="prompt">leo@hpc:~$ tail -f experience.log</p>
+      <h2>experience</h2>
+      <div class="timeline">
+        <article>
+          <h3>[2026-02 → aujourd'hui] AI/HPC Senior Consultant</h3>
+          <p class="meta">Aneo · CDI · Paris et périphérie, hybride</p>
+          <p>
+            Infra cloud/on-prem hybride pour la recherche quantitative :
+            orchestrateur répartissant les jobs entre AWS et Slurm.
+          </p>
+        </article>
+        <article>
+          <h3>[2026-02 → aujourd'hui] Portfolio Platform Engineer</h3>
+          <p class="meta">Capital Fund Management (CFM) · intérimaire · Paris, sur site</p>
+        </article>
+        <article>
+          <h3>[2025-08 → 2026-01] Sr. AI/HPC Engineer</h3>
+          <p class="meta">MINERVA European Support Centre for Scalable AI Research and Deployment · CDD · Saclay</p>
+          <p>Déploiement et exploitation du supercalculateur Dalia — 360 PFlop/s (FP16), 72x NVIDIA GB200.</p>
+        </article>
+        <article>
+          <h3>[2024-03 → 2026-01] Ingénieur en intelligence artificielle</h3>
+          <p class="meta">CNRS · CDD · Saclay</p>
+          <p>
+            Support de 2000 utilisateurs du supercalculateur Jean Zay
+            (125 PFlop/s, 1456x NVIDIA H100) — du reset de mot de passe au
+            pré-entraînement de LLM. Installation/maintenance des
+            environnements IA &amp; HPC, benchmarking multi-GPU/multi-nœud,
+            entraînement/finetuning de modèles à grande échelle (BLOOM,
+            LLaMA, ViT). Contributeur au réseau PNRIA. Formateur pour
+            Fidle, DLO-JZ, Panoram'IA ; ateliers, hackathons, AI-DevTalks.
+          </p>
+        </article>
+        <article>
+          <h3>[2025-12] Chargé de cours — Master Data Science &amp; AI for Business, X-HEC</h3>
+          <p class="meta">École Polytechnique · indépendant · Palaiseau</p>
+        </article>
+        <article>
+          <h3>[2022-03 → 2025-09] Formateur — Deep Learning &amp; HPC</h3>
+          <p class="meta">FIDLE · à distance</p>
+        </article>
+        <article>
+          <h3>[2022-03 → 2024-02] Ingénieur en intelligence artificielle</h3>
+          <p class="meta">Inria · CDD · Saclay</p>
+          <p>Supercalculateur Jean Zay, génération précédente — 37 PFlop/s.</p>
+        </article>
+        <article>
+          <h3>[2021-02 → 2021-08] Ingénieur IA embarquée (stage)</h3>
+          <p class="meta">Atos, Toulouse</p>
+          <p>
+            Vision par ordinateur embarquée pour le contrôle qualité en
+            temps réel : inférence YOLOv4/Faster R-CNN sur Jetson Nano,
+            -80% de latence via quantization &amp; pruning.
+          </p>
+        </article>
+        <article>
+          <h3>[2020-04 → 2020-08] Ingénieur infrastructure (stage)</h3>
+          <p class="meta">SPASCIA, Ramonville-Saint-Agne</p>
+          <p>Cluster ARM-SBC 110 nœuds (440 cœurs CPU) pour entraînement RL asynchrone — OS sur mesure, automatisation, monitoring, services web.</p>
+        </article>
+      </div>
+    `,
+  },
+  {
+    id: "competences",
+    label: "stack",
+    en: () => `
+      <p class="prompt">leo@hpc:~$ cat stack.yaml</p>
+      <h2>stack</h2>
+      <ul class="skills">
+        <li><strong>ai</strong> — PyTorch, TensorFlow, Transformers, Hugging Face, vLLM, Llama.cpp, Gradio, Agents</li>
+        <li><strong>ml</strong> — Scikit-learn, NumPy, Pandas, Optuna</li>
+        <li><strong>monitoring</strong> — MLflow, W&amp;B</li>
+        <li><strong>distributed_training</strong> — FSDP, DDP, ZeRO, tensor/pipeline parallelism, bf16, fp8, NCCL, DeepSpeed</li>
+        <li><strong>hpc</strong> — OpenMP, MPI, NCCL, multi-node, multi-GPU</li>
+        <li><strong>infra</strong> — Proxmox, Slurm, Docker, Singularity, Kubernetes, Spack, Git, CI/CD, DVC, Ray, Dask</li>
+        <li><strong>cloud</strong> — AWS (Lambda, S3, EC2)</li>
+        <li><strong>lang</strong> — Python, C/C++, Bash, Julia, MATLAB, LaTeX</li>
+        <li><strong>human_lang</strong> — fr (native), en (fluent)</li>
+      </ul>
+    `,
+    fr: () => `
+      <p class="prompt">leo@hpc:~$ cat stack.yaml</p>
+      <h2>stack</h2>
+      <ul class="skills">
+        <li><strong>ai</strong> — PyTorch, TensorFlow, Transformers, Hugging Face, vLLM, Llama.cpp, Gradio, Agents</li>
+        <li><strong>ml</strong> — Scikit-learn, NumPy, Pandas, Optuna</li>
+        <li><strong>monitoring</strong> — MLflow, W&amp;B</li>
+        <li><strong>distributed_training</strong> — FSDP, DDP, ZeRO, parallélisme tenseur/pipeline, bf16, fp8, NCCL, DeepSpeed</li>
+        <li><strong>hpc</strong> — OpenMP, MPI, NCCL, multi-nœud, multi-GPU</li>
+        <li><strong>infra</strong> — Proxmox, Slurm, Docker, Singularity, Kubernetes, Spack, Git, CI/CD, DVC, Ray, Dask</li>
+        <li><strong>cloud</strong> — AWS (Lambda, S3, EC2)</li>
+        <li><strong>lang</strong> — Python, C/C++, Bash, Julia, MATLAB, LaTeX</li>
+        <li><strong>human_lang</strong> — fr (natif), en (courant)</li>
+      </ul>
+    `,
+  },
+  {
+    id: "formation",
+    label: "education",
+    en: () => `
+      <p class="prompt">leo@hpc:~$ cat education.log</p>
+      <h2>education</h2>
+      <div class="timeline">
+        <article>
+          <h3>MSc Industrial Systems Engineering / Data Science</h3>
+          <p class="meta">INSA Centre Val de Loire, Blois · 2016-2021</p>
+        </article>
+        <article>
+          <h3>Exchange — MSc Electrical Engineering</h3>
+          <p class="meta">École de Technologie Supérieure, Montréal · 2019</p>
+        </article>
+        <article>
+          <h3>TOEIC® — C1 (965/990)</h3>
+          <p class="meta">issued 2020-10</p>
+        </article>
+      </div>
+    `,
+    fr: () => `
+      <p class="prompt">leo@hpc:~$ cat education.log</p>
+      <h2>formation</h2>
+      <div class="timeline">
+        <article>
+          <h3>Master Ingénierie des Systèmes Industriels / Data Science</h3>
+          <p class="meta">INSA Centre Val de Loire, Blois · 2016-2021</p>
+        </article>
+        <article>
+          <h3>Échange — Master Génie Électrique</h3>
+          <p class="meta">École de Technologie Supérieure, Montréal · 2019</p>
+        </article>
+        <article>
+          <h3>TOEIC® — C1 (965/990)</h3>
+          <p class="meta">émis 2020-10</p>
+        </article>
+      </div>
+    `,
+  },
+];
+</script>
+  <script>
+// Bascule FR/EN locale (même page, pas de navigation) : petit fondu
+// sur le contenu pendant le remplacement, pas de dépendance à
+// l'ancien overlay plein écran (supprimé avec l'architecture iframe).
+const DEFAULT_LANG = "en";
+const STORAGE_KEY = "siteLang";
+
+let currentLang = localStorage.getItem(STORAGE_KEY) || DEFAULT_LANG;
+
+function renderFloors(lang) {
+  const container = document.getElementById("floors");
+  container.innerHTML = "";
+  for (const floor of FLOORS) {
+    const section = document.createElement("section");
+    section.className = "floor";
+    section.id = floor.id;
+    section.dataset.floorId = floor.id;
+    const render = floor[lang] || floor[DEFAULT_LANG];
+    section.innerHTML = `<div class="floor-inner">${render()}</div>`;
+    container.appendChild(section);
+  }
+  // drag-swipe.js met en cache la liste des étages : elle doit être
+  // rafraîchie puisque les nœuds DOM viennent d'être recréés.
+  document.dispatchEvent(new CustomEvent("floors-rendered"));
+}
+
+function updateLangButton() {
+  const btn = document.getElementById("lang-switch");
+  if (!btn) return;
+  btn.textContent = currentLang === "en" ? "FR" : "EN";
+  btn.setAttribute("aria-label", currentLang === "en" ? "Passer en français" : "Switch to English");
+}
+
+const MIRROR_HINT_LABEL = { fr: "Mode humain", en: "Human mode" };
+
+function updateMirrorHint() {
+  const link = document.getElementById("mirror-hint");
+  if (!link) return;
+  link.textContent = MIRROR_HINT_LABEL[currentLang] || MIRROR_HINT_LABEL[DEFAULT_LANG];
+}
+
+function toggleLanguage() {
+  const container = document.getElementById("floors");
+  const nextLang = currentLang === "en" ? "fr" : "en";
+  container.classList.add("lang-fading");
+  window.setTimeout(() => {
+    currentLang = nextLang;
+    localStorage.setItem(STORAGE_KEY, currentLang);
+    renderFloors(currentLang);
+    updateLangButton();
+    updateMirrorHint();
+    requestAnimationFrame(() => {
+      container.classList.remove("lang-fading");
+    });
+  }, 180);
+}
+
+function initLang() {
+  renderFloors(currentLang);
+  updateLangButton();
+  updateMirrorHint();
+  document.getElementById("lang-switch").addEventListener("click", toggleLanguage);
+}
+
+// Script en fin de <body> : rendu immédiat, pendant le parsing, pour que
+// le contenu existe dès le premier frame peint (cf. drag-swipe.js).
+if (document.getElementById("floors")) initLang();
+else document.addEventListener("DOMContentLoaded", initLang);
+</script>
+  <script>
+// Glissement horizontal → bascule vers le site miroir, sur l'étage
+// équivalent. Même fichier sur les deux sites, seuls MIRROR_URL
+// et NEIGHBOR_DIRECTION changent.
+//
+// Principe anti-flash : un iframe caché du site miroir est préchargé
+// et gardé synchronisé (scroll) en continu. Pendant le drag, on fait
+// glisser CE VRAI RENDU du miroir à l'écran (pas une simple couleur/
+// overlay) — zéro flash puisque rien ne recharge pendant le geste.
+// La navigation réelle (changement de domaine dans la barre d'adresse)
+// n'est déclenchée qu'une fois l'iframe déjà en pleine couverture de
+// l'écran, donc invisible pour l'essentiel du ressenti.
+(function () {
+  // URL de base du site miroir (avec slash final). tools/build-poc.mjs
+  // réécrit cette ligne pour les tests locaux / le déploiement sous /poc/.
+  const MIRROR_URL = "https://hunoutl.gitlab.io/poc/";
+  const MIRROR_ORIGIN = new URL(MIRROR_URL).origin;
+  // Payload d'arrivée transmis dans le fragment d'URL : "#~sw.<scrollY>.<lang>.<flags>".
+  // Pas window.name : Firefox (88+) et Safari le vident sur toute
+  // navigation cross-site — github.io et gitlab.io sont deux sites
+  // distincts (Public Suffix List). Le fragment ne correspond à aucun id
+  // d'élément, donc pas de scroll d'ancre natif ; il est retiré de l'URL
+  // (replaceState) dès la lecture.
+  const PAYLOAD_PREFIX = "#~sw.";
+  const FLAG_USER_ACTIVATION = 1;
+  const FLAG_DEBUG = 2;
+  const ARRIVAL_KEY = "swipeArrival";
+  // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
+  // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
+  // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).
+  const NEIGHBOR_DIRECTION = -1;
+  const DRAG_THRESHOLD_RATIO = 0.22; // fraction de la largeur d'écran
+  const SETTLE_MS = 260;
+  // Le clic sur le bouton n'a pas le retour tactile immédiat d'un
+  // vrai geste de drag : une bascule instantanée y paraît plus abrupte,
+  // donc on lui laisse une animation un peu plus longue.
+  const BUTTON_SETTLE_MS = 420;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const isEmbedded = window.self !== window.top;
+
+  // window.innerHeight varie pendant le scroll sur mobile (la barre
+  // d'adresse se réduit/réapparaît) : deux mesures de fraction de scroll
+  // prises à des moments différents (page fraîchement arrivée vs après
+  // avoir déjà pas mal scrollé ailleurs) ne comptent alors pas la même
+  // hauteur, ce qui décale la correspondance entre les deux sites — visible
+  // seulement après avoir déjà navigué une fois. visualViewport.height
+  // reflète la hauteur réellement visible à l'instant T, de façon plus
+  // stable dans ce cas précis.
+  function viewportHeight() {
+    return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  }
+
+  let floors = [];
+  let currentFloorId = "hero";
+  let dragging = false;
+  let committed = false;
+  let startX = 0;
+  let currentDx = 0;
+  let pointerId = null;
+  let mirrorFrame = null;
+  let mirrorFrameReady = false;
+
+  function currentFloorFromScroll() {
+    let best = floors[0];
+    let bestDist = Infinity;
+    const center = window.scrollY + viewportHeight() / 2;
+    for (const el of floors) {
+      const dist = Math.abs(el.offsetTop + el.offsetHeight / 2 - center);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = el;
+      }
+    }
+    return best ? best.id : "hero";
+  }
+
+  // On synchronise en pixels ABSOLUS (scrollY), pas en fraction : les deux
+  // sites ont maintenant des hauteurs de page quasi identiques (étages à
+  // hauteur fixe partagée), donc un même scrollY tombe déjà au même
+  // endroit visuel des deux côtés. La fraction (scrollY / (scrollHeight -
+  // hauteur de viewport)) dépendait de la hauteur de viewport mesurée à
+  // l'instant T — sur mobile, cette valeur peut légèrement varier entre le
+  // moment de l'aperçu (pendant le drag) et celui de l'atterrissage réel
+  // (après navigation), ce qui décalait la position de façon intermittente.
+  // Rester en pixels bruts supprime cette dépendance.
+  function scrollFraction() {
+    const max = document.documentElement.scrollHeight - viewportHeight();
+    if (max <= 0) return 0;
+    return Math.min(1, Math.max(0, window.scrollY / max));
+  }
+
+  // Hauteur réelle de "100vh" sur CETTE page (sur mobile : viewport sans
+  // la barre d'adresse). Dans l'iframe, 100vh vaudrait la hauteur de
+  // l'iframe — différente dès que la barre d'adresse bouge — et les étages
+  // en min-height:100vh n'auraient pas la même hauteur dans l'aperçu que
+  // sur la vraie page d'arrivée (contenu décalé = "saut" à la bascule).
+  // L'iframe reçoit donc cette valeur et l'applique via --vh (cf. CSS).
+  let vhProbe = null;
+  function measureVh() {
+    if (!vhProbe) {
+      vhProbe = document.createElement("div");
+      vhProbe.style.cssText = "position:absolute;top:0;left:-9999px;width:1px;height:100vh;visibility:hidden;pointer-events:none";
+      document.body.appendChild(vhProbe);
+    }
+    return vhProbe.offsetHeight;
+  }
+
+  function syncMirrorFrameScroll() {
+    if (!mirrorFrame || !mirrorFrameReady) return;
+    const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
+    mirrorFrame.contentWindow.postMessage(
+      { type: "sync-scroll", scrollY: window.scrollY, lang, vh: measureVh() },
+      MIRROR_ORIGIN
+    );
+  }
+
+  // Partagé par l'arrivée réelle (handleArrival) et l'aperçu synchronisé
+  // (message reçu dans l'iframe miroir) : la langue de la page de
+  // départ prime toujours sur la préférence locale.
+  function syncIncomingLang(lang) {
+    if (
+      lang &&
+      typeof currentLang !== "undefined" &&
+      lang !== currentLang &&
+      typeof renderFloors === "function"
+    ) {
+      currentLang = lang;
+      localStorage.setItem("siteLang", currentLang);
+      renderFloors(currentLang);
+      if (typeof updateLangButton === "function") updateLangButton();
+      if (typeof updateMirrorHint === "function") updateMirrorHint();
+    }
+  }
+
+  function langNow() {
+    return typeof currentLang !== "undefined" ? currentLang : "";
+  }
+
+  // --- Debug (POC) : ?debug=1 sur l'un des deux sites, propagé à l'autre
+  // via le payload. Affiche un panneau de mesures en bas de l'écran.
+  let DEBUG = false;
+  let debugPanel = null;
+  const debugLines = [];
+
+  function initDebug(arrival) {
+    const params = new URLSearchParams(location.search);
+    try {
+      if (params.get("debug") === "0") sessionStorage.removeItem("swipeDebug");
+      else if (params.has("debug") || (arrival && arrival.debug)) sessionStorage.setItem("swipeDebug", "1");
+      DEBUG = sessionStorage.getItem("swipeDebug") === "1";
+    } catch (err) {
+      DEBUG = params.has("debug");
+    }
+  }
+
+  function debugLog(line) {
+    if (!DEBUG || isEmbedded) return;
+    debugLines.push(line);
+    if (!debugPanel) {
+      debugPanel = document.createElement("pre");
+      debugPanel.id = "swipe-debug";
+      debugPanel.style.cssText =
+        "position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;margin:0;padding:8px 10px;" +
+        "font:11px/1.4 ui-monospace,monospace;background:rgba(0,0,0,.82);color:#7CFC9A;" +
+        "border-radius:6px;white-space:pre-wrap;pointer-events:none;max-height:40vh;overflow:hidden";
+      document.body.appendChild(debugPanel);
+    }
+    debugPanel.textContent = debugLines.slice(-14).join("\n");
+  }
+
+  function reportArrivalMetrics(arrival) {
+    if (!DEBUG || isEmbedded) return;
+    const nav = performance.getEntriesByType("navigation")[0];
+    const ref = document.referrer ? new URL(document.referrer).host : "—";
+    debugLog(`[${location.host}] arrivée: ${arrival ? "swipe" : "directe"} · referrer ${ref}`);
+    if (arrival) {
+      debugLog(`userActivation au départ: ${arrival.ua === null ? "n/a" : arrival.ua}`);
+      debugLog(`innerHeight départ ${arrival.innerHeight} → arrivée ${window.innerHeight} · 100vh ${measureVh()}`);
+    }
+    if (nav) {
+      debugLog(
+        `deliveryType="${nav.deliveryType ?? "n/a"}" · type=${nav.type} · ` +
+          `TTFB ${Math.round(nav.responseStart - nav.startTime)}ms · DCL ${Math.round(nav.domContentLoadedEventEnd)}ms`
+      );
+    }
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (e.name === "first-contentful-paint") debugLog(`FCP ${Math.round(e.startTime)}ms`);
+        }
+      }).observe({ type: "paint", buffered: true });
+    } catch (err) {
+      /* paint timing non supporté */
+    }
+    const nrr = nav && nav.notRestoredReasons;
+    if (nrr) {
+      const reasons = [];
+      const walk = (n) => {
+        if (!n) return;
+        (n.reasons || []).forEach((r) => reasons.push(`${n.src || n.url || "main"}: ${r.reason}`));
+        (n.children || []).forEach(walk);
+      };
+      walk(nrr);
+      if (reasons.length) debugLog(`bfcache refusé: ${reasons.join(" | ")}`);
+    }
+    const specOk = HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules");
+    debugLog(`speculationrules: ${specOk ? "oui" : "non"} · scrollY ${Math.round(window.scrollY)}`);
+  }
+
+  // Speculation Rules : PREFETCH (et non prerender) du document miroir.
+  // Le prerender est interdit en cross-site ; le prefetch cross-site est
+  // autorisé par Chrome tant que l'utilisateur n'a pas de cookie sur le
+  // site cible (cas des Pages statiques). L'URL doit être EXACTEMENT celle
+  // de la navigation réelle (le fragment du payload n'est pas envoyé au
+  // serveur). Comme la page est un fichier unique tout-inline (cf.
+  // build-poc), document prefetché = zéro requête réseau à l'arrivée.
+  function addPrefetchRule() {
+    if (!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"))) return;
+    const script = document.createElement("script");
+    script.type = "speculationrules";
+    script.textContent = JSON.stringify({
+      prefetch: [{ source: "list", urls: [MIRROR_URL], eagerness: "immediate", referrer_policy: "strict-origin-when-cross-origin" }],
+    });
+    document.head.appendChild(script);
+  }
+
+  function onScroll() {
+    currentFloorId = currentFloorFromScroll();
+    syncMirrorFrameScroll();
+    updateFallbackLinks();
+  }
+
+  // lang-switch.js recrée entièrement les sections .floor (innerHTML =
+  // "") quand on bascule FR/EN : le tableau `floors` mis en cache ici
+  // pointerait alors vers des nœuds DOM détachés. On le rafraîchit à
+  // chaque changement de langue.
+  function refreshFloors() {
+    floors = Array.from(document.querySelectorAll("[data-floor-id]"));
+    onScroll();
+  }
+
+  // dx suit toujours le doigt/curseur, mais le sens qui DÉCLENCHE la
+  // navigation dépend du côté où se trouve le voisin : glisser vers le
+  // voisin (comme dans une galerie) = dx * NEIGHBOR_DIRECTION < 0.
+  function progressTowardNeighbor(dx) {
+    return -dx * NEIGHBOR_DIRECTION;
+  }
+
+  function setLayers(dx) {
+    const w = window.innerWidth;
+    const clampedDx = Math.max(-w, Math.min(w, dx));
+    // contenu courant : suit le doigt, jusqu'à sortir complètement.
+    document.documentElement.style.setProperty("--drag-x", `${clampedDx}px`);
+    // iframe miroir : commence hors-champ (NEIGHBOR_DIRECTION * w) et
+    // glisse vers 0 au même rythme que le doigt, sans jamais dépasser 0.
+    if (mirrorFrame) {
+      const restOffset = NEIGHBOR_DIRECTION * w;
+      const raw = restOffset + clampedDx;
+      const frameOffset = restOffset >= 0 ? Math.max(0, Math.min(restOffset, raw)) : Math.min(0, Math.max(restOffset, raw));
+      mirrorFrame.style.transition = "none";
+      mirrorFrame.style.transform = `translateX(${frameOffset}px)`;
+    }
+  }
+
+  // Retour par l'historique (bfcache) : si on est arrivé ici PAR UN SWIPE
+  // depuis le miroir, que l'entrée d'historique n'a pas bougé et que la
+  // position/langue sont restées celles de l'arrivée, alors la page miroir
+  // précédente est exactement dans l'état voulu : history.back() la
+  // restaure depuis le bfcache, sans aucun chargement. Aucun canal ne
+  // permet de lui transmettre une NOUVELLE position (stockage partitionné
+  // par site), d'où la condition "pas bougé".
+  function arrivalRecord() {
+    try {
+      return JSON.parse(sessionStorage.getItem(ARRIVAL_KEY) || "null");
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function canReturnViaHistory() {
+    const rec = arrivalRecord();
+    return (
+      !!rec &&
+      rec.len === history.length &&
+      rec.lang === langNow() &&
+      Math.abs(window.scrollY - rec.y) <= 4 &&
+      document.referrer.startsWith(MIRROR_ORIGIN)
+    );
+  }
+
+  let backFallbackTimer = null;
+
+  function goToMirrorReal() {
+    const ua = navigator.userActivation ? navigator.userActivation.isActive : null;
+    if (canReturnViaHistory()) {
+      debugLog(`départ: history.back() (bfcache) · userActivation ${ua}`);
+      history.back();
+      // Filet de sécurité : si rien ne s'est passé (entrée introuvable...),
+      // navigation classique. Annulé au pagehide (sinon le timer, gelé
+      // avec la page dans le bfcache, se déclencherait à son retour).
+      backFallbackTimer = window.setTimeout(navigateWithPayload, 700, ua);
+      return;
+    }
+    navigateWithPayload(ua);
+  }
+
+  function navigateWithPayload(ua) {
+    try {
+      sessionStorage.removeItem(ARRIVAL_KEY);
+    } catch (err) {
+      /* stockage indisponible */
+    }
+    const flags = (ua ? FLAG_USER_ACTIVATION : 0) | (DEBUG ? FLAG_DEBUG : 0);
+    debugLog(`départ: navigation · userActivation ${ua}`);
+    window.location.href = `${MIRROR_URL}${PAYLOAD_PREFIX}${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
+  }
+
+  function settleCommitted(durationMs) {
+    const ms = durationMs || SETTLE_MS;
+    const w = window.innerWidth;
+    document.body.classList.add("settling");
+    document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
+    if (mirrorFrame) {
+      mirrorFrame.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+      mirrorFrame.style.transform = "translateX(0px)";
+    }
+    window.setTimeout(goToMirrorReal, ms);
+  }
+
+  function settleCancelled() {
+    document.body.classList.add("settling");
+    document.documentElement.style.setProperty("--drag-x", "0px");
+    if (mirrorFrame) {
+      mirrorFrame.style.transition = `transform ${SETTLE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+    }
+    window.setTimeout(() => {
+      document.body.classList.remove("settling");
+    }, SETTLE_MS);
+  }
+
+  // Sur les vrais éléments de texte, on laisse le navigateur gérer la
+  // sélection : le drag n'y démarre pas. Les liens/boutons (mirror-hint,
+  // lang-switch...), eux, PEUVENT servir de point de départ au drag —
+  // seuls les champs de saisie restent exclus.
+  //
+  // À la souris, un vrai clic-glisser démarré sur du texte doit lancer
+  // une sélection native, jamais notre swipe : FULL_TEXT_SELECTOR le
+  // garantit. Au doigt, la sélection se fait par appui long (pas par un
+  // simple glissement), et en layout mobile une colonne le texte occupe
+  // presque tout l'écran — exclure ces éléments au toucher ne laisserait
+  // quasiment plus aucune zone de départ valide pour le swipe. On se
+  // contente donc d'exclure les champs de saisie au toucher, et de
+  // laisser tomber notre drag en cours de route (voir updateDrag) si une
+  // sélection démarre malgré tout.
+  const FULL_TEXT_SELECTOR = "input, textarea, p, li, h1, h2, h3, span, strong, em, code, pre, blockquote, dt, dd, td, th";
+  const TOUCH_TEXT_SELECTOR = "input, textarea";
+
+  // Au-delà de cette distance, on considère qu'un vrai geste de drag a eu
+  // lieu : le clic natif qui suivrait (sur un lien/bouton où le drag a
+  // démarré) doit être annulé pour ne pas déclencher son action normale
+  // en plus de la bascule de site.
+  const DRAG_MOTION_PX = 8;
+  let hadDragMotion = false;
+
+  // Sur tactile, les bords de l'écran sont réservés au geste natif de
+  // retour arrière (back-swipe) des navigateurs mobiles modernes : on
+  // n'y démarre jamais notre propre drag, seul le centre de l'écran le
+  // déclenche (c'est aussi le geste le plus naturel au pouce).
+  const TOUCH_EDGE_RATIO = 0.12;
+
+  // Sur tactile, on ne sait pas d'entrée si le geste est un swipe
+  // horizontal (bascule de site), un scroll vertical, ou le début d'une
+  // sélection de texte (appui long) : tant que l'intention n'est pas
+  // tranchée (DIRECTION_LOCK_PX franchi dans un sens ou l'autre), on ne
+  // touche à rien. La souris, elle, n'a pas cette ambiguïté : intention
+  // résolue tout de suite (toujours horizontale).
+  //
+  // Le corps de page reste en touch-action: pan-y (cf. CSS) : le scroll
+  // vertical est nativement géré par le navigateur (fluide, avec
+  // inertie) dès qu'un mouvement est reconnu comme vertical — on lâche
+  // alors complètement ce geste (dragging=false) sans jamais appeler
+  // preventDefault dessus.
+  //
+  // IMPORTANT : le tactile est géré par les Touch Events natifs
+  // (touchstart/touchmove/touchend), PAS par les Pointer Events. Testé
+  // en conditions réelles (Chromium + émulation tactile) : avec
+  // touch-action: none, les Pointer Events se font annuler par un
+  // pointercancel prématuré après un seul mouvement (bug/quirk du
+  // moteur constaté indépendamment de notre logique — reproduit même
+  // avec des handlers vides). Repasser en touch-action: none pour
+  // "simplifier" réintroduirait ce bug — ne pas y retoucher sans retest.
+  // Les Touch Events reçoivent toute la séquence sans coupure, et avec
+  // pan-y le scroll vertical n'a même plus besoin d'être réimplémenté à
+  // la main. La souris reste sur Pointer Events (aucun souci constaté
+  // là, et ça couvre aussi stylet/trackpad).
+  const DIRECTION_LOCK_PX = 10;
+  let startY = 0;
+  let intentResolved = false;
+  let activeTouchId = null;
+
+  function beginDrag(clientX, clientY, isTouch) {
+    dragging = true;
+    committed = false;
+    hadDragMotion = false;
+    intentResolved = !isTouch; // souris : pas d'ambiguïté à lever
+    startX = clientX;
+    startY = clientY;
+    currentDx = 0;
+    document.body.classList.remove("settling");
+  }
+
+  // evt, si fourni, sert uniquement à preventDefault le geste natif une
+  // fois confirmé horizontal — le reste ne dépend que des coordonnées.
+  function updateDrag(clientX, clientY, evt) {
+    if (!dragging) return;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+
+    if (!intentResolved) {
+      const selection = window.getSelection && window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        // Une vraie sélection de texte a démarré (appui long) : on
+        // laisse le navigateur faire, notre swipe n'a plus sa place ici.
+        dragging = false;
+        return;
+      }
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > DIRECTION_LOCK_PX) {
+        // Scroll vertical : touch-action: pan-y laisse le navigateur le
+        // gérer nativement (scroll fluide, inertie) — on lâche ce geste.
+        dragging = false;
+        return;
+      }
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > DIRECTION_LOCK_PX) {
+        intentResolved = true;
+        document.body.classList.add("dragging");
+      } else {
+        return; // pas assez de mouvement pour trancher
+      }
+    }
+
+    currentDx = dx;
+    if (Math.abs(currentDx) > DRAG_MOTION_PX) hadDragMotion = true;
+    if (evt) evt.preventDefault();
+    if (progressTowardNeighbor(currentDx) > 0) {
+      setLayers(currentDx);
+    } else {
+      setLayers(0);
+    }
+  }
+
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove("dragging");
+    const threshold = window.innerWidth * DRAG_THRESHOLD_RATIO;
+    if (intentResolved && progressTowardNeighbor(currentDx) > threshold) {
+      committed = true;
+      settleCommitted();
+    } else {
+      settleCancelled();
+    }
+    currentDx = 0;
+  }
+
+  function abortDrag() {
+    if (!dragging) return;
+    dragging = false;
+    settleCancelled();
+  }
+
+  // --- Souris : Pointer Events ---
+  function onPointerDown(e) {
+    if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
+    if (e.button !== undefined && e.button !== 0) return;
+    if (e.target.closest(FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    // Tant que l'iframe miroir n'a pas fini de charger (CSS + son propre JS,
+    // qui remplit par ex. le texte du bouton de bascule), la faire glisser
+    // à l'écran révèlerait une page à moitié initialisée — constaté comme
+    // la cause du bandeau "parfois" incomplet en aperçu. On laisse
+    // simplement le geste ne rien faire ce court instant plutôt que de
+    // montrer un état intermédiaire.
+    if (!mirrorFrameReady) return;
+    pointerId = e.pointerId;
+    beginDrag(e.clientX, e.clientY, false);
+  }
+
+  function onPointerMove(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    updateDrag(e.clientX, e.clientY, e);
+  }
+
+  function onPointerUp(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    endDrag();
+  }
+
+  // --- Tactile : Touch Events ---
+  function onTouchStart(e) {
+    if (dragging) return; // un doigt déjà suivi
+    if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
+    const t = e.touches[0];
+    if (e.target.closest(TOUCH_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    const edge = window.innerWidth * TOUCH_EDGE_RATIO;
+    if (t.clientX < edge || t.clientX > window.innerWidth - edge) return;
+    activeTouchId = t.identifier;
+    beginDrag(t.clientX, t.clientY, true);
+  }
+
+  function findActiveTouch(touchList) {
+    for (let i = 0; i < touchList.length; i++) {
+      if (touchList[i].identifier === activeTouchId) return touchList[i];
+    }
+    return null;
+  }
+
+  function onTouchMove(e) {
+    if (!dragging) return;
+    const t = findActiveTouch(e.touches);
+    if (!t) return;
+    updateDrag(t.clientX, t.clientY, e);
+  }
+
+  function onTouchEnd(e) {
+    if (!dragging) return;
+    if (findActiveTouch(e.touches)) return; // un autre doigt a levé, pas le nôtre
+    endDrag();
+  }
+
+  function onTouchCancel(e) {
+    if (!dragging) return;
+    if (findActiveTouch(e.touches)) return;
+    abortDrag();
+  }
+
+  // Le lien de secours (ex. "plain-language version") n'est PAS imbriqué
+  // dans un étage : son href doit suivre l'étage courant en continu,
+  // pas être figé une fois pour toutes sur "hero" au chargement.
+  function updateFallbackLinks() {
+    document.querySelectorAll("[data-mirror-link]").forEach((el) => {
+      el.href = `${MIRROR_URL}#${currentFloorId}`;
+    });
+  }
+
+  function createMirrorFrame() {
+    if (isEmbedded) return; // pas d'aperçu récursif dans un aperçu
+    const iframe = document.createElement("iframe");
+    iframe.id = "mirror-frame";
+    iframe.src = `${MIRROR_URL}?embedded=1`;
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.tabIndex = -1;
+    // Largeur/hauteur en px exacts (pas 100vw/100vh en CSS) : sur mobile,
+    // 100vw ne correspond pas toujours pixel pour pixel à window.innerWidth
+    // (utilisé ci-dessous et dans setLayers pour le calcul du transform) —
+    // l'écart, même sub-pixel, laissait un filet de la couleur du site
+    // cible visible sur un bord.
+    iframe.style.width = `${window.innerWidth}px`;
+    iframe.style.height = `${window.innerHeight}px`;
+    iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+    iframe.addEventListener("load", () => {
+      mirrorFrameReady = true;
+      syncMirrorFrameScroll();
+    });
+    document.body.appendChild(iframe);
+    mirrorFrame = iframe;
+    // La barre d'adresse mobile qui se replie/réapparaît change
+    // innerHeight : l'iframe doit suivre, sinon elle ne couvre plus tout
+    // l'écran (ou déborde) au moment de la bascule.
+    window.addEventListener("resize", () => {
+      iframe.style.width = `${window.innerWidth}px`;
+      iframe.style.height = `${window.innerHeight}px`;
+      if (!dragging && !committed) {
+        iframe.style.transition = "none";
+        iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+      }
+      syncMirrorFrameScroll();
+    });
+  }
+
+  function listenForSync() {
+    window.addEventListener("message", (e) => {
+      if (e.origin !== MIRROR_ORIGIN) return;
+      const data = e.data;
+      if (!data) return;
+      if (data.type !== "sync-scroll") return;
+      syncIncomingLang(data.lang);
+      if (typeof data.vh === "number" && data.vh > 0) {
+        document.documentElement.style.setProperty("--vh", `${data.vh}px`);
+      }
+      const max = document.documentElement.scrollHeight;
+      if (typeof data.scrollY === "number") window.scrollTo(0, Math.min(data.scrollY, max));
+    });
+  }
+
+  // Arrivée par swipe : lecture SYNCHRONE du payload (fragment d'URL),
+  // pendant le parsing, avant le tout premier rendu. La page n'est plus
+  // jamais masquée (visibility:hidden) : le premier frame peint est
+  // directement le bon contenu, à la bonne position. Masquer retardait le
+  // premier rendu de contenu, ce qui laissait voir le fond vide — en
+  // particulier sur Chrome Android, où le "paint holding" cross-origin
+  // (qui garderait l'ancienne page affichée) est désactivé par défaut.
+  let arrivalScrollY = null;
+
+  function readArrivalPayload() {
+    const h = location.hash;
+    if (!h.startsWith(PAYLOAD_PREFIX)) return null;
+    const [y, lang, flags, vh] = h.slice(PAYLOAD_PREFIX.length).split(".");
+    history.replaceState(history.state, "", location.pathname + location.search);
+    const f = Number(flags) || 0;
+    return {
+      scrollY: Number(y) || 0,
+      lang: lang || "",
+      ua: (f & FLAG_USER_ACTIVATION) !== 0,
+      debug: (f & FLAG_DEBUG) !== 0,
+      innerHeight: Number(vh) || null,
+    };
+  }
+
+  function applyArrivalScroll() {
+    if (arrivalScrollY === null) return;
+    window.scrollTo(0, Math.min(arrivalScrollY, document.documentElement.scrollHeight));
+  }
+
+  function handleArrival(arrival) {
+    if (!arrival) {
+      try {
+        sessionStorage.removeItem(ARRIVAL_KEY);
+      } catch (err) {
+        /* stockage indisponible */
+      }
+      return;
+    }
+    syncIncomingLang(arrival.lang);
+    arrivalScrollY = arrival.scrollY;
+    applyArrivalScroll();
+    try {
+      sessionStorage.setItem(
+        ARRIVAL_KEY,
+        JSON.stringify({ len: history.length, y: Math.round(window.scrollY), lang: langNow() })
+      );
+    } catch (err) {
+      /* stockage indisponible */
+    }
+  }
+
+  // Remet les calques dans l'état "page normale", sans animation. Appelé
+  // au pagehide : si la page part dans le bfcache, c'est cet état qui sera
+  // ré-affiché à la restauration (et non l'état "glissée hors écran").
+  function resetLayersInstant() {
+    dragging = false;
+    committed = false;
+    document.body.classList.remove("settling", "dragging");
+    document.body.classList.add("no-anim");
+    document.documentElement.style.setProperty("--drag-x", "0px");
+    if (mirrorFrame) {
+      mirrorFrame.style.transition = "none";
+      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+    }
+  }
+
+  function init() {
+    const arrival = isEmbedded ? null : readArrivalPayload();
+    initDebug(arrival);
+    floors = Array.from(document.querySelectorAll("[data-floor-id]"));
+    listenForSync();
+    document.addEventListener("floors-rendered", refreshFloors);
+    handleArrival(arrival);
+    onScroll();
+    reportArrivalMetrics(arrival);
+    // Filet de sécurité si la mise en page bouge encore d'ici le load
+    // (normalement non : tout est inline, photo en data URI avec
+    // width/height, polices système).
+    window.addEventListener("load", applyArrivalScroll, { once: true });
+
+    window.addEventListener("pagehide", () => {
+      window.clearTimeout(backFallbackTimer);
+      resetLayersInstant();
+    });
+    window.addEventListener("pageshow", (e) => {
+      if (!e.persisted) return;
+      debugLog(`[${location.host}] restaurée depuis le bfcache · scrollY ${Math.round(window.scrollY)}`);
+      syncMirrorFrameScroll();
+      requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("no-anim")));
+    });
+
+    if (reduceMotion || isEmbedded) {
+      document.body.classList.add("reduced-motion");
+      return; // pas de drag élastique, seulement les liens de secours
+    }
+
+    addPrefetchRule();
+    createMirrorFrame();
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchCancel);
+    // Coupe la sélection de texte native dès le pointerdown (avant même
+    // que le seuil de drag soit atteint) : sans ça, un petit mouvement
+    // sur du texte déclenche une sélection avant qu'on ait pu réagir.
+    document.addEventListener("selectstart", (e) => {
+      if (dragging) e.preventDefault();
+    });
+
+    // Si un vrai geste de drag a démarré sur un lien/bouton (lang-switch,
+    // mirror-hint...), on annule le clic qui suivrait sinon en plus —
+    // capture (avant la cible) pour intercepter avant tout autre handler.
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (hadDragMotion) {
+          hadDragMotion = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      },
+      true
+    );
+
+    // Le lien de secours ("plain-language version"...) déclenche la même
+    // animation de bascule qu'un drag mené jusqu'au bout à la main,
+    // plutôt qu'un saut d'ancre natif instantané.
+    document.addEventListener("click", (e) => {
+      const link = e.target.closest("[data-mirror-link]");
+      if (!link) return;
+      e.preventDefault();
+      dragging = false;
+      committed = true;
+      settleCommitted(BUTTON_SETTLE_MS);
+    });
+  }
+
+  // Script placé en fin de <body> : le DOM utile existe déjà, on
+  // initialise tout de suite (pas d'attente de DOMContentLoaded, qui
+  // laisserait au navigateur une occasion de peindre avant).
+  if (document.getElementById("floors")) init();
+  else document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+  <div id="render-ready" hidden></div>
+</body>
+</html>
