@@ -20,7 +20,17 @@
   // distincts (Public Suffix List). Le fragment ne correspond à aucun id
   // d'élément, donc pas de scroll d'ancre natif ; il est retiré de l'URL
   // (replaceState) dès la lecture.
+  //
+  // Exception Chromium : le prefetch (Speculation Rules) n'est réutilisé
+  // que si l'URL de navigation est EXACTEMENT l'URL prefetchée, fragment
+  // compris (mesuré : avec "#~sw..." → PrefetchSuccessfulButNotUsed).
+  // Là où les Speculation Rules existent, on garde donc l'URL nue et le
+  // payload passe par window.name, que Chrome conserve en cross-site.
+  // Firefox/Safari (qui vident window.name) n'ont pas de prefetch :
+  // fragment pour eux.
   const PAYLOAD_PREFIX = "#~sw.";
+  const NAME_PREFIX = "~sw.";
+  const SPEC_RULES = !!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"));
   const FLAG_USER_ACTIVATION = 1;
   const FLAG_DEBUG = 2;
   const ARRIVAL_KEY = "swipeArrival";
@@ -171,7 +181,7 @@
     if (!DEBUG || isEmbedded) return;
     const nav = performance.getEntriesByType("navigation")[0];
     const ref = document.referrer ? new URL(document.referrer).host : "—";
-    debugLog(`[${location.host}] arrivée: ${arrival ? "swipe" : "directe"} · referrer ${ref}`);
+    debugLog(`[${location.host}] arrivée: ${arrival ? `swipe (${arrival.via})` : "directe"} · referrer ${ref}`);
     if (arrival) {
       debugLog(`userActivation au départ: ${arrival.ua === null ? "n/a" : arrival.ua}`);
       debugLog(`innerHeight départ ${arrival.innerHeight} → arrivée ${window.innerHeight} · 100vh ${measureVh()}`);
@@ -214,7 +224,7 @@
   // serveur). Comme la page est un fichier unique tout-inline (cf.
   // build-poc), document prefetché = zéro requête réseau à l'arrivée.
   function addPrefetchRule() {
-    if (!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"))) return;
+    if (!SPEC_RULES) return;
     const script = document.createElement("script");
     script.type = "speculationrules";
     script.textContent = JSON.stringify({
@@ -310,8 +320,14 @@
       /* stockage indisponible */
     }
     const flags = (ua ? FLAG_USER_ACTIVATION : 0) | (DEBUG ? FLAG_DEBUG : 0);
-    debugLog(`départ: navigation · userActivation ${ua}`);
-    window.location.href = `${MIRROR_URL}${PAYLOAD_PREFIX}${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
+    const payload = `${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
+    debugLog(`départ: navigation (${SPEC_RULES ? "window.name" : "fragment"}) · userActivation ${ua}`);
+    if (SPEC_RULES) {
+      window.name = NAME_PREFIX + payload;
+      window.location.href = MIRROR_URL;
+    } else {
+      window.location.href = `${MIRROR_URL}${PAYLOAD_PREFIX}${payload}`;
+    }
   }
 
   function settleCommitted(durationMs) {
@@ -601,10 +617,22 @@
   let arrivalScrollY = null;
 
   function readArrivalPayload() {
-    const h = location.hash;
-    if (!h.startsWith(PAYLOAD_PREFIX)) return null;
-    const [y, lang, flags, vh] = h.slice(PAYLOAD_PREFIX.length).split(".");
-    history.replaceState(history.state, "", location.pathname + location.search);
+    let raw = null;
+    let via = "";
+    if (location.hash.startsWith(PAYLOAD_PREFIX)) {
+      raw = location.hash.slice(PAYLOAD_PREFIX.length);
+      via = "fragment";
+      history.replaceState(history.state, "", location.pathname + location.search);
+    }
+    if (window.name.startsWith(NAME_PREFIX)) {
+      if (!raw) {
+        raw = window.name.slice(NAME_PREFIX.length);
+        via = "window.name";
+      }
+      window.name = ""; // sinon resterait attaché à l'onglet (rechargement, autres navigations)
+    }
+    if (!raw) return null;
+    const [y, lang, flags, vh] = raw.split(".");
     const f = Number(flags) || 0;
     return {
       scrollY: Number(y) || 0,
@@ -612,6 +640,7 @@
       ua: (f & FLAG_USER_ACTIVATION) !== 0,
       debug: (f & FLAG_DEBUG) !== 0,
       innerHeight: Number(vh) || null,
+      via,
     };
   }
 
