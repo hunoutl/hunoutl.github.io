@@ -30,7 +30,7 @@ function updateLangButton() {
   btn.setAttribute("aria-label", currentLang === "en" ? "Passer en français" : "Switch to English");
 }
 
-const MIRROR_HINT_LABEL = { fr: "Mode humain", en: "Human mode" };
+const MIRROR_HINT_LABEL = { fr: "← voir la matière", en: "← see the matter" };
 
 function updateMirrorHint() {
   const link = document.getElementById("mirror-hint");

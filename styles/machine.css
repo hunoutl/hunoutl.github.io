@@ -1,14 +1,37 @@
+/* Machine — "Calcul". Le même monde que la Façade, vu comme une simulation :
+   maillage, champ de vitesse, découpage du domaine, métriques.
+   Police : JetBrains Mono (SIL OFL 1.1, cf. assets/OFL-jbmono.txt), deux
+   instances statiques subsettées, inlinées en base64 par tools/build.mjs. */
+@font-face {
+  font-family: "JBM";
+  src: url(../assets/jbmono-400.woff2) format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "JBM";
+  src: url(../assets/jbmono-700.woff2) format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
 :root {
   --drag-x: 0px;
-  --bg: #0b0e0c;
-  --ink: #d6f5df;
-  --accent: #3ddc84;
-  --muted: #6f9e80;
-  --line: #1c2620;
-  /* Même valeur des deux côtés Façade/Machine : c'est ce qui garantit
-     que le bandeau tombe exactement à la même hauteur dans l'aperçu
-     iframe pendant le drag. */
-  --bar-height: 3.25rem;
+  --bg: #05070b;
+  --panel: rgba(7, 10, 16, 0.9);
+  --line: #223046;
+  --fg: #c3cede;
+  --dim: #6f7f96;
+  --hi: #eef4fc;
+  --acc: #39d0ff;
+  --r0: #4f7dff;
+  --r1: #22e0c0;
+  --r2: #ffb01f;
+  --r3: #ff4f5e;
+  /* Même valeur des deux côtés Façade/Machine. */
+  --bar-height: 52px;
+  --mono: "JBM", ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --gutter: max(6vw, 32px);
 }
 
 * {
@@ -23,109 +46,80 @@ body {
 
 html {
   overflow-x: hidden;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
 }
 
 html::-webkit-scrollbar {
   width: 0;
-  height: 0; /* Chrome/Safari, aussi masqué à l'intérieur de l'iframe miroir */
+  height: 0;
 }
 
 body {
   background: var(--bg);
-  color: var(--ink);
-  font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 13.5px;
   line-height: 1.6;
-  /* pan-y : scroll vertical natif (fluide, avec inertie). Le swipe
-     horizontal est géré par des Touch Events dédiés (cf. drag-swipe.js)
-     qui interceptent proprement le geste — voir le commentaire détaillé
-     là-bas avant de retoucher à cette valeur. */
+  /* pan-y : cf. drag-swipe.js avant de retoucher. */
   touch-action: pan-y;
   overscroll-behavior-x: none;
   overflow-x: hidden;
 }
 
-.floor {
-  /* min-height (pas height fixe) : un étage court reste calé sur un
-     plein écran, mais un étage avec beaucoup de contenu (ex.
-     expériences) grandit automatiquement au lieu d'être coupé avec un
-     ascenseur interne. Le raccord de scroll entre Façade et Machine se
-     fait par fraction (0–1), donc un léger écart de hauteur naturelle
-     entre les deux versions du même étage n'introduit pas de décalage
-     perceptible.  */
-  min-height: var(--vh, 100vh); /* --vh : fixé dans l'iframe miroir, cf. drag-swipe.js */
-  overflow-x: hidden;
-  display: flex;
-  align-items: center;
-  padding: 4rem 1.5rem;
-  border-bottom: 1px solid var(--line);
-  background-image: linear-gradient(rgba(61, 220, 132, 0.03) 1px, transparent 1px);
-  background-size: 100% 2px;
-}
-
-/* Étage avec beaucoup de contenu : hauteur fixe (même valeur des deux
-   côtés Façade/Machine) plutôt qu'une mesure dynamique en JS — celle-ci
-   provoquait un léger redimensionnement après l'affichage de la page
-   (donc un flash) le temps que l'échange avec le site miroir se termine.
-   Valeurs mesurées en largeur mobile (390px, l'un des deux textes y
-   passe à plus de lignes qu'en desktop) + marge, pas seulement en
-   desktop — sinon l'écart réapparaît sur mobile dès que le retour à la
-   ligne change. */
-.floor[data-floor-id="experiences"] {
-  min-height: 2350px;
-}
-
-/* Même principe pour "compétences" : les deux tons ont un contenu de
-   longueur assez différente (liste vs bloc YAML) pour créer un écart de
-   hauteur notable, ce qui décalait la correspondance de fraction de
-   scroll entre les deux sites dès qu'on passait de l'un à l'autre. */
-.floor[data-floor-id="competences"] {
-  min-height: 860px;
-}
-
-/* Idem pour le hero : le texte d'intro n'a pas la même longueur en FR/EN
-   selon le ton, ce qui décalait déjà légèrement tous les étages suivants. */
-.floor[data-floor-id="hero"] {
-  min-height: 950px;
-}
-
-/* "À propos" n'avait jusqu'ici aucune hauteur forcée : sur mobile, le
-   texte anglais (plus long à cette largeur) déborde du premier écran
-   alors que la version FR y tient encore, ce qui décale tout le reste
-   du scroll par fraction. */
-.floor[data-floor-id="apropos"] {
-  min-height: 760px;
-}
-
-.floor-inner {
-  max-width: 680px;
-  margin: 0 auto;
+#sim {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
   transform: translateX(var(--drag-x));
   transition: transform 0.05s linear;
 }
 
-.floor[data-floor-id="hero"] .floor-inner {
-  max-width: 800px;
+/* --- Étages : hauteurs FIXES, identiques dans facade.css --- */
+#floors {
+  position: relative;
+  z-index: 1;
+  padding-top: var(--bar-height);
+  transition: opacity 0.18s ease;
 }
 
-.hero-layout {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
+#floors.lang-fading {
+  opacity: 0;
 }
 
-.hero-text {
-  min-width: 0;
+.floor {
+  position: relative;
+  height: var(--fh);
+  overflow: hidden;
 }
 
-@media (max-width: 640px) {
-  .hero-layout {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+#hero { --fh: 940px; }
+#apropos { --fh: 880px; }
+#experiences { --fh: 2200px; }
+#competences { --fh: 1000px; }
+#formation { --fh: 760px; }
+#contact { --fh: 760px; }
+
+@media (max-width: 759px) {
+  #hero { --fh: 960px; }
+  #apropos { --fh: 980px; }
+  #experiences { --fh: 2200px; }
+  #competences { --fh: 1300px; }
+  #formation { --fh: 980px; }
+  #contact { --fh: 880px; }
+}
+
+.floor-inner {
+  position: absolute;
+  inset: 0;
+  transform: translateX(var(--drag-x));
+  transition: transform 0.05s linear;
 }
 
 body.dragging .floor-inner,
+body.dragging #sim,
 body.dragging #mirror-frame {
   transition: none;
 }
@@ -136,17 +130,9 @@ body.dragging {
   cursor: grabbing;
 }
 
-body.settling .floor-inner {
+body.settling .floor-inner,
+body.settling #sim {
   transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-#floors {
-  padding-top: var(--bar-height);
-  transition: opacity 0.18s ease;
-}
-
-#floors.lang-fading {
-  opacity: 0;
 }
 
 #mirror-frame {
@@ -157,129 +143,462 @@ body.settling .floor-inner {
   border: none;
   z-index: 60;
   pointer-events: none;
-  /* Promeut l'iframe sur son propre calque GPU dès sa création, pas au
-     premier vrai drag : sans ça, le tout premier transform anime un
-     calque pas encore rasterisé, et la peinture (dont le bandeau du
-     haut) peut arriver en retard d'une frame ou deux — constaté comme
-     "pas de bandeau au premier essai, mais oui au deuxième". */
   will-change: transform;
-  background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
+  background: #f3ede2; /* fond de la Façade */
+}
+
+/* --- éléments communs --- */
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+  font-weight: 400;
+}
+
+b,
+strong {
+  font-weight: 700;
+}
+
+.win {
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.win > .bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.win > .bar .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  background: var(--acc);
+  vertical-align: 1px;
+}
+
+.win > .body {
+  padding: 14px 16px 16px;
 }
 
 .prompt {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
+  color: var(--r1);
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.prompt::before {
-  content: "";
+.sec {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 6px;
 }
 
-.profile-photo {
+.sec b {
+  color: var(--r2);
+}
+
+.cap {
+  color: var(--dim);
+  font-size: 12.5px;
+}
+
+.meta {
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+sub {
+  font-size: 0.75em;
+}
+
+/* étiquettes posées dans le monde (coordonnées partagées) */
+.tag,
+.src-tag,
+.field-cap {
+  position: absolute;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: rgba(5, 7, 11, 0.82);
+  border-left: 2px solid var(--acc);
+  padding: 4px 8px;
+}
+
+.ranks-row {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  height: 18px;
+  pointer-events: none;
+}
+
+.ranks-row span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* --- §0 hero --- */
+.field-wrap {
+  position: absolute;
+  left: calc(var(--hero-x) - var(--hero-r));
+  top: calc(var(--hero-y) - var(--hero-r));
+  width: calc(var(--hero-r) * 2);
+  height: calc(var(--hero-r) * 2);
+}
+
+.field {
   display: block;
-  flex-shrink: 0;
-  width: 176px;
-  height: 176px;
-  object-fit: cover;
-  border-radius: 8px;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 0;
+}
+
+.field-cap {
+  left: 0;
+  top: calc(100% + 10px);
+  white-space: nowrap;
+}
+
+.hero-win {
+  position: absolute;
+  left: var(--gutter);
+  top: 110px;
+  width: min(46vw, 640px);
 }
 
 h1 {
-  font-size: clamp(1.8rem, 5vw, 2.6rem);
-  margin: 0 0 0.5rem;
-  color: var(--accent);
-}
-
-h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-  color: var(--accent);
+  font-weight: 700;
+  font-size: clamp(54px, 6.6vw, 104px);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--hi);
+  margin: 4px 0 14px;
 }
 
 .subtitle {
-  font-size: 1rem;
-  color: var(--muted);
-  margin: 0 0 1.5rem;
+  color: var(--r2);
+  margin-bottom: 14px;
 }
 
 .lede {
-  color: var(--ink);
+  font-size: 13.5px;
 }
 
 .quick-contacts {
-  margin-top: 2rem;
+  margin-top: 18px;
   display: flex;
-  gap: 1.2rem;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .quick-contacts a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  opacity: 0.85;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  width: 38px;
+  height: 38px;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .quick-contacts a:hover {
-  opacity: 1;
-  background: var(--accent);
+  color: var(--acc);
+  border-color: var(--acc);
+}
+
+.hud {
+  position: absolute;
+  left: var(--gutter);
+  top: 556px;
+  width: min(46vw, 640px);
+  font-size: 12px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 14px;
+  row-gap: 3px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--dim);
+}
+
+.kv dd {
+  margin: 0;
+  color: var(--hi);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.tgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tg {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 1px 7px;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.tg.on {
   color: var(--bg);
+  background: var(--acc);
+  border-color: var(--acc);
 }
 
-.timeline article {
-  margin-bottom: 2rem;
+.bars {
+  display: flex;
+  gap: 3px;
+  height: 16px;
+  align-items: flex-end;
 }
 
-.timeline h3 {
-  margin: 0 0 0.25rem;
-  color: var(--ink);
-  font-size: 1rem;
+.bars i {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: var(--h, 0%);
+  background: var(--c, var(--acc));
 }
 
-.meta {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
+.hud .note {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.5;
 }
 
-.skills {
-  list-style: none;
-  padding: 0;
+/* --- §1 scatter --- */
+.about-win {
+  position: absolute;
+  left: 50vw;
+  top: 150px;
+  width: min(44vw, 620px);
 }
 
-.skills li {
-  padding: 0.5rem 0;
-  border-bottom: 1px dashed var(--line);
-  font-size: 0.95rem;
+.src-tag {
+  left: calc(var(--src-x) - 150px);
+  top: calc(var(--src-y) + 200px);
+  width: 300px;
 }
 
-.skills li strong {
-  color: var(--accent);
+/* --- §2 advect --- */
+.exp-head {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  width: min(80vw, 620px);
+  transform: translateX(-50%);
 }
 
-.cv-download {
-  display: inline-block;
-  margin-top: 2rem;
-  padding: 0.6rem 1.2rem;
-  border: 1px solid var(--accent);
-  color: var(--accent);
+.jobs {
+  position: absolute;
+  inset: 0;
+}
+
+.job {
+  position: absolute;
+  width: min(34vw, 470px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 10px 14px 12px;
+}
+
+.job.left {
+  right: calc(50% + 120px);
+  border-right: 2px solid var(--acc);
+}
+
+.job.right {
+  left: calc(50% + 120px);
+  border-left: 2px solid var(--acc);
+}
+
+.job:nth-child(1) { top: 300px; }
+.job:nth-child(2) { top: 500px; }
+.job:nth-child(3) { top: 700px; }
+.job:nth-child(4) { top: 900px; }
+.job:nth-child(5) { top: 1250px; }
+.job:nth-child(6) { top: 1400px; }
+.job:nth-child(7) { top: 1560px; }
+.job:nth-child(8) { top: 1730px; }
+.job:nth-child(9) { top: 1890px; }
+
+.ts {
+  color: var(--r2);
+  font-size: 12px;
+}
+
+.job h3 {
+  color: var(--hi);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 2px 0 2px;
+}
+
+.job-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+/* --- §3 forces --- */
+.skills-head {
+  position: absolute;
+  left: var(--gutter);
+  top: 60px;
+  width: min(44vw, 560px);
+}
+
+.force {
+  --fw: min(300px, 27vw);
+  position: absolute;
+  width: var(--fw);
+  font-size: 11.5px;
+  line-height: 1.45;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+
+.force .att {
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+
+.force .att b {
+  color: var(--hi);
+}
+
+.kvl {
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+
+.kvl span {
+  color: var(--r1);
+}
+
+.force.f0 { left: calc(var(--a0x) - var(--fw) / 2); top: calc(var(--a0y) + 96px); }
+.force.f1 { left: calc(var(--a1x) - var(--fw) / 2); top: calc(var(--a1y) + 96px); }
+.force.f2 { left: calc(var(--a2x) - var(--fw) / 2); top: calc(var(--a2y) + 96px); }
+.force.f3 { left: calc(var(--a3x) - var(--fw) / 2); top: calc(var(--a3y) + 96px); }
+.force.f4 { left: calc(var(--a4x) - var(--fw) / 2); top: calc(var(--a4y) + 96px); }
+
+/* --- §4 init --- */
+.edu-win {
+  position: absolute;
+  left: var(--gutter);
+  top: 130px;
+  width: min(44vw, 580px);
+}
+
+.edu-win .cap {
+  margin-bottom: 16px;
+}
+
+.edu {
+  margin-bottom: 12px;
+}
+
+.edu .k {
+  color: var(--r1);
+}
+
+.lat-tag {
+  left: var(--lat-x0);
+  top: calc(var(--lat-y1) + 14px);
+}
+
+/* --- §5 write --- */
+.contact-head {
+  position: absolute;
+  left: 50%;
+  top: 60px;
+  width: min(86vw, 560px);
+  transform: translateX(-50%);
+}
+
+.links {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--sink-y) + 110px);
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  color: var(--hi);
+  background: var(--bg);
+  border: 1px solid var(--line);
   text-decoration: none;
-  border-radius: 2px;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-/* Bandeau plein écran plutôt que deux boutons flottants isolés : sur
-   mobile, un bouton flottant se retrouvait au-dessus du texte des
-   étages, jamais parfaitement aligné entre la page réelle et l'aperçu
-   iframe pendant le drag (fixed = relatif au viewport de CHAQUE
-   document). Un bandeau de la couleur de fond, à la même hauteur des
-   deux côtés, élimine ce décalage visuel au moment de la bascule. */
+.links a:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+.links .lh {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.how {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  width: min(92vw, 820px);
+  transform: translateX(-50%);
+  font-size: 11.5px;
+}
+
+.how .kv dd {
+  color: var(--fg);
+}
+
+/* --- bandeau --- */
 .site-bar {
   position: fixed;
   top: 0;
@@ -290,45 +609,216 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1rem;
+  padding: 0 16px;
   background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.site-bar .mirror-hint {
+  order: -1;
+}
+
+.site-bar .lang-switch {
+  order: 2;
+}
+
+.brand {
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.brand span {
+  color: var(--dim);
+}
+
+.brand em {
+  font-style: normal;
+  color: var(--dim);
+  margin-left: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .mirror-hint,
 .lang-switch {
   font-family: inherit;
-  font-size: 0.75rem;
-  background: transparent;
-  /* Couleur opaque pré-mélangée plutôt qu'un accent à 100% + opacity :
-     un enfant semi-transparent à l'intérieur d'un iframe cross-origin
-     soumis à un transform en continu (le drag) peut rater sa
-     recomposition sur mobile — le calque du bandeau (opaque) se
-     repeint bien, mais celui, alpha-blendé, des boutons reste parfois
-     "gelé"/invisible un instant. En restant 100% opaque ici, il n'y a
-     plus de calque semi-transparent à recomposer : plus de risque de
-     ce glitch, sur mobile comme ailleurs. */
-  border: 1px solid color-mix(in srgb, var(--accent) 75%, var(--bg));
-  color: color-mix(in srgb, var(--accent) 75%, var(--bg));
-  padding: 0.35rem 0.7rem;
-  border-radius: 2px;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid #3a4a62;
+  color: #a9b8cc;
+  padding: 4px 10px;
   cursor: pointer;
   text-decoration: none;
+  line-height: 1.4;
 }
 
 .mirror-hint:hover,
 .lang-switch:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+/* --- Mobile : même géométrie que facade.css (mêmes hauteurs) --- */
+@media (max-width: 759px) {
+  body {
+    font-size: 12.5px;
+  }
+
+  .brand em {
+    display: none;
+  }
+
+  .field-cap {
+    left: calc(100% + 10px);
+    top: 0;
+    white-space: normal;
+    width: calc(50vw - 100px);
+  }
+
+  .hero-stack {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 300px;
+  }
+
+  .hero-win,
+  .hud {
+    position: static;
+    width: auto;
+  }
+
+  .hud {
+    margin-top: 10px;
+    font-size: 11.5px;
+  }
+
+  .win > .body {
+    padding: 10px 12px 12px;
+  }
+
+  h1 {
+    font-size: 46px;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    margin-bottom: 8px;
+  }
+
+  .lede {
+    font-size: 12.5px;
+  }
+
+  .quick-contacts {
+    margin-top: 12px;
+  }
+
+  .hud .note,
+  .hud .opt {
+    display: none;
+  }
+
+  .about-win {
+    left: 12px;
+    right: 12px;
+    top: 330px;
+    width: auto;
+  }
+
+  .src-tag {
+    top: calc(var(--src-y) + 104px);
+  }
+
+  .exp-head {
+    left: 62px;
+    right: 12px;
+    top: 50px;
+    width: auto;
+    transform: none;
+  }
+
+  .jobs {
+    position: absolute;
+    inset: 270px 12px 0 62px;
+  }
+
+  .job,
+  .job.left,
+  .job.right {
+    position: static;
+    width: auto;
+    margin-bottom: 18px;
+    border-right: 1px solid var(--line);
+    border-left: 2px solid var(--acc);
+  }
+
+  .skills-head {
+    left: 12px;
+    right: 12px;
+    top: 50px;
+    width: auto;
+  }
+
+  .force {
+    width: 60vw;
+    font-size: 11px;
+  }
+
+  .force.f0,
+  .force.f2,
+  .force.f4 {
+    left: 36vw;
+  }
+
+  .force.f1,
+  .force.f3 {
+    left: 4vw;
+  }
+
+  .force.f0 { top: calc(var(--a0y) - 40px); }
+  .force.f1 { top: calc(var(--a1y) - 40px); }
+  .force.f2 { top: calc(var(--a2y) - 40px); }
+  .force.f3 { top: calc(var(--a3y) - 40px); }
+  .force.f4 { top: calc(var(--a4y) - 40px); }
+
+  .edu-win {
+    left: 12px;
+    right: 12px;
+    top: 420px;
+    width: auto;
+  }
+
+  .contact-head {
+    top: 40px;
+  }
+
+  .links {
+    top: calc(var(--sink-y) + 90px);
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .links a {
+    width: 250px;
+  }
+
+  .how {
+    bottom: 16px;
+    font-size: 10.5px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .floor-inner {
+  .floor-inner,
+  #sim {
     transition: none;
   }
 }
 
-/* Remise à zéro instantanée des calques (pagehide → bfcache), cf. drag-swipe.js */
+/* Remise à zéro instantanée des calques (bfcache), cf. drag-swipe.js */
 body.no-anim .floor-inner,
+body.no-anim #sim,
 body.no-anim #mirror-frame {
   transition: none !important;
 }

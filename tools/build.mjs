@@ -24,7 +24,7 @@ if (mirrorUrl && !/^https?:\/\/.+\/$/.test(mirrorUrl)) {
   process.exit(1);
 }
 
-const MIME = { ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
+const MIME = { ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
 const dataUri = (p) => `data:${MIME[extname(p)]};base64,${readFileSync(join(root, p)).toString("base64")}`;
 
 function transformScript(path, code) {
@@ -43,7 +43,11 @@ let html = read("index.html");
 // Commentaires HTML et préchargements cross-site (inutiles : tout est inline).
 html = html.replace(/<!--[\s\S]*?-->\s*/g, "");
 html = html.replace(/\s*<link rel="(?:prefetch|preconnect)"[^>]*>/g, "");
-html = html.replace(/<link rel="stylesheet" href="([^"]+)" \/>/g, (_, p) => `<style>\n${read(p)}</style>`);
+// CSS : polices et images référencées par url(../assets/...) → data URI
+// (polices OFL subsettées : aucune requête, aucune police en retard).
+const inlineCss = (p) =>
+  read(p).replace(/url\(\.\.\/(assets\/[\w.-]+)\)/g, (_, a) => `url(${dataUri(a)})`);
+html = html.replace(/<link rel="stylesheet" href="([^"]+)" \/>/g, (_, p) => `<style>\n${inlineCss(p)}</style>`);
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, p) => `<script>\n${transformScript(p, read(p))}</script>`);
 
 const leftovers = html.match(/(?:src|href)="(?!https?:|data:|#|mailto:)[^"]+"/g)?.filter((m) => !m.includes("${"));
