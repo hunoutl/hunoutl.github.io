@@ -43,6 +43,17 @@
   // vrai geste de drag : une bascule instantanée y paraît plus abrupte,
   // donc on lui laisse une animation un peu plus longue.
   const BUTTON_SETTLE_MS = 420;
+  // Habillage de la bascule (proposition "cartographie") : en mode "scan",
+  // la page courante NE BOUGE PAS ; l'iframe miroir est révélé sur place,
+  // derrière une ligne de balayage qui suit le doigt — comme une
+  // radiographie passée sur la carte (les deux faces partagent la même
+  // géographie au pixel près). Mécanique identique au mode "slide"
+  // d'origine : seuls les transforms appliqués diffèrent. Fenêtre
+  // (#mirror-window, overflow:hidden) translatée de +x, iframe
+  // contre-translaté de -x : le contenu miroir reste immobile à l'écran,
+  // tout est composité (aucun clip-path animé). Même état final que
+  // "slide" (tout à 0) au moment de la navigation.
+  const REVEAL = "scan"; // "slide" = comportement d'origine
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isEmbedded = window.self !== window.top;
 
@@ -66,7 +77,31 @@
   let currentDx = 0;
   let pointerId = null;
   let mirrorFrame = null;
+  let mirrorWindow = null; // mode "scan" : fenêtre qui contient l'iframe
+  let scanLine = null; // mode "scan" : ligne de balayage (bord de la fenêtre)
   let mirrorFrameReady = false;
+
+  // Place les calques du miroir. offset = décalage de la fenêtre (0 =
+  // couverture totale, NEIGHBOR_DIRECTION * largeur = repos hors champ).
+  function placeMirror(offset, ms) {
+    if (!mirrorFrame) return;
+    const tr = ms ? `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)` : "none";
+    if (REVEAL === "scan" && mirrorWindow) {
+      mirrorWindow.style.transition = tr;
+      mirrorWindow.style.transform = `translateX(${offset}px)`;
+      mirrorFrame.style.transition = tr;
+      mirrorFrame.style.transform = `translateX(${-offset}px)`;
+      if (scanLine) {
+        // voisin à gauche : la ligne est accrochée au bord DROIT de la fenêtre
+        if (NEIGHBOR_DIRECTION < 0) scanLine.style.left = `${window.innerWidth}px`;
+        scanLine.style.transition = tr;
+        scanLine.style.transform = `translateX(${offset}px)`;
+      }
+    } else {
+      mirrorFrame.style.transition = tr;
+      mirrorFrame.style.transform = `translateX(${offset}px)`;
+    }
+  }
 
   function currentFloorFromScroll() {
     let best = floors[0];
@@ -265,8 +300,7 @@
       const restOffset = NEIGHBOR_DIRECTION * w;
       const raw = restOffset + clampedDx;
       const frameOffset = restOffset >= 0 ? Math.max(0, Math.min(restOffset, raw)) : Math.min(0, Math.max(restOffset, raw));
-      mirrorFrame.style.transition = "none";
-      mirrorFrame.style.transform = `translateX(${frameOffset}px)`;
+      placeMirror(frameOffset, 0);
     }
   }
 
@@ -291,20 +325,14 @@
     const w = window.innerWidth;
     document.body.classList.add("settling");
     document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
-    if (mirrorFrame) {
-      mirrorFrame.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-      mirrorFrame.style.transform = "translateX(0px)";
-    }
+    placeMirror(0, ms);
     window.setTimeout(goToMirrorReal, ms);
   }
 
   function settleCancelled() {
     document.body.classList.add("settling");
     document.documentElement.style.setProperty("--drag-x", "0px");
-    if (mirrorFrame) {
-      mirrorFrame.style.transition = `transform ${SETTLE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
-    }
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, SETTLE_MS);
     window.setTimeout(() => {
       document.body.classList.remove("settling");
     }, SETTLE_MS);
@@ -504,7 +532,7 @@
     abortDrag();
   }
 
-  // Le lien de secours (ex. "plain-language version") n'est PAS imbriqué
+  // Le lien de secours (ex. "Back to the map") n'est PAS imbriqué
   // dans un étage : son href doit suivre l'étage courant en continu,
   // pas être figé une fois pour toutes sur "hero" au chargement.
   function updateFallbackLinks() {
@@ -527,23 +555,40 @@
     // cible visible sur un bord.
     iframe.style.width = `${window.innerWidth}px`;
     iframe.style.height = `${window.innerHeight}px`;
-    iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
     iframe.addEventListener("load", () => {
       mirrorFrameReady = true;
       syncMirrorFrameScroll();
     });
-    document.body.appendChild(iframe);
     mirrorFrame = iframe;
+    if (REVEAL === "scan") {
+      mirrorWindow = document.createElement("div");
+      mirrorWindow.id = "mirror-window";
+      mirrorWindow.setAttribute("aria-hidden", "true");
+      mirrorWindow.style.width = `${window.innerWidth}px`;
+      mirrorWindow.style.height = `${window.innerHeight}px`;
+      mirrorWindow.appendChild(iframe);
+      scanLine = document.createElement("div");
+      scanLine.id = "scan-line";
+      scanLine.className = NEIGHBOR_DIRECTION > 0 ? "from-right" : "from-left";
+      scanLine.setAttribute("aria-hidden", "true");
+      scanLine.innerHTML = '<span class="scan-tab"></span>';
+      document.body.appendChild(mirrorWindow);
+      document.body.appendChild(scanLine);
+    } else {
+      document.body.appendChild(iframe);
+    }
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
     // La barre d'adresse mobile qui se replie/réapparaît change
     // innerHeight : l'iframe doit suivre, sinon elle ne couvre plus tout
     // l'écran (ou déborde) au moment de la bascule.
     window.addEventListener("resize", () => {
       iframe.style.width = `${window.innerWidth}px`;
       iframe.style.height = `${window.innerHeight}px`;
-      if (!dragging && !committed) {
-        iframe.style.transition = "none";
-        iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+      if (mirrorWindow) {
+        mirrorWindow.style.width = `${window.innerWidth}px`;
+        mirrorWindow.style.height = `${window.innerHeight}px`;
       }
+      if (!dragging && !committed) placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
       syncMirrorFrameScroll();
     });
   }
@@ -624,10 +669,7 @@
     document.body.classList.remove("settling", "dragging");
     document.body.classList.add("no-anim");
     document.documentElement.style.setProperty("--drag-x", "0px");
-    if (mirrorFrame) {
-      mirrorFrame.style.transition = "none";
-      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
-    }
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
   }
 
   function init() {
@@ -690,7 +732,7 @@
       true
     );
 
-    // Le lien de secours ("plain-language version"...) déclenche la même
+    // Le lien de secours ("Back to the map"...) déclenche la même
     // animation de bascule qu'un drag mené jusqu'au bout à la main,
     // plutôt qu'un saut d'ancre natif instantané.
     document.addEventListener("click", (e) => {

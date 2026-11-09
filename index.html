@@ -7,12 +7,12 @@
        après la navigation cross-site n'est jamais blanc par défaut. -->
   <meta name="color-scheme" content="dark" />
   <title>hunoutl — AI/HPC Engineer</title>
-  <meta name="description" content="Léo Hunout, AI/HPC infrastructure engineer. Swipe right for the plain-language version." />
+  <meta name="description" content="Léo Hunout, AI/HPC infrastructure engineer. The blueprint under the map — swipe right for the illustrated version." />
   <meta property="og:title" content="hunoutl — AI/HPC Engineer" />
   <meta property="og:description" content="4+ years building large-scale AI/HPC compute infrastructure." />
   <link rel="stylesheet" href="styles/machine.css" />
   <style>
-    html { background: #0b0e0c; }
+    html { background: #0b1d33; }
   </style>
   <!-- Bloque le premier rendu jusqu'à ce que #render-ready (après les
        scripts, en fin de body) soit parsé : le premier frame peint contient
@@ -23,14 +23,17 @@
 <body>
   <header class="site-bar">
     <button id="lang-switch" class="lang-switch" type="button">FR</button>
-    <a id="mirror-hint" class="mirror-hint" data-mirror-link href="#" data-floor-id="hero"></a>
+    <span id="plate-name" class="plate-name"></span>
+    <a id="mirror-hint" class="mirror-hint" data-mirror-link href="#"></a>
   </header>
 
   <main id="floors"></main>
 
+  <script src="scripts/geo.js"></script>
   <script src="scripts/content.js"></script>
   <script src="scripts/lang-switch.js"></script>
   <script src="scripts/drag-swipe.js"></script>
+  <script src="scripts/scene.js"></script>
   <div id="render-ready" hidden></div>
 </body>
 </html>

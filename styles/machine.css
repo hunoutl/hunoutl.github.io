@@ -1,285 +1,850 @@
+/* Machine — « Le plan » : blueprint (bleu de Prusse, trait blanc-cyan),
+   cotes, cartouches techniques, paquets ambrés. Source Code Pro (OFL),
+   subsettée et inlinée en base64 par tools/build.mjs. */
+@font-face {
+  font-family: "SCP";
+  src: url(../assets/fonts/scp-r.woff2) format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "SCP";
+  src: url(../assets/fonts/scp-b.woff2) format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "SCP";
+  src: url(../assets/fonts/scp-i.woff2) format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
 :root {
   --drag-x: 0px;
-  --bg: #0b0e0c;
-  --ink: #d6f5df;
-  --accent: #3ddc84;
-  --muted: #6f9e80;
-  --line: #1c2620;
-  /* Même valeur des deux côtés Façade/Machine : c'est ce qui garantit
-     que le bandeau tombe exactement à la même hauteur dans l'aperçu
-     iframe pendant le drag. */
-  --bar-height: 3.25rem;
+  --bg: #0b1d33;
+  --bg-2: #0e2442;
+  --line: #d6eaff;
+  --dim: #6f93bd;
+  --faint: #2a4a72;
+  --cyan: #5fd6ff;
+  --amber: #ffb648;
+  --red: #ff6b5e;
+  --green: #73f2b0;
+  --bar-height: 52px; /* identique à la Façade */
+  --mono: "SCP", ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, monospace;
 }
 
 * {
   box-sizing: border-box;
 }
-
 html,
 body {
   margin: 0;
   padding: 0;
 }
-
 html {
   overflow-x: hidden;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
 }
-
 html::-webkit-scrollbar {
   width: 0;
-  height: 0; /* Chrome/Safari, aussi masqué à l'intérieur de l'iframe miroir */
+  height: 0;
 }
 
 body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
-  line-height: 1.6;
-  /* pan-y : scroll vertical natif (fluide, avec inertie). Le swipe
-     horizontal est géré par des Touch Events dédiés (cf. drag-swipe.js)
-     qui interceptent proprement le geste — voir le commentaire détaillé
-     là-bas avant de retoucher à cette valeur. */
+  background-color: var(--bg);
+  /* papier calque millimétré : grille mineure 20 px, majeure 100 px */
+  background-image: linear-gradient(rgba(130, 180, 240, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(130, 180, 240, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(130, 180, 240, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(130, 180, 240, 0.05) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  background-position: -1px -1px;
+  color: var(--line);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.5;
   touch-action: pan-y;
   overscroll-behavior-x: none;
   overflow-x: hidden;
-}
-
-.floor {
-  /* min-height (pas height fixe) : un étage court reste calé sur un
-     plein écran, mais un étage avec beaucoup de contenu (ex.
-     expériences) grandit automatiquement au lieu d'être coupé avec un
-     ascenseur interne. Le raccord de scroll entre Façade et Machine se
-     fait par fraction (0–1), donc un léger écart de hauteur naturelle
-     entre les deux versions du même étage n'introduit pas de décalage
-     perceptible.  */
-  min-height: var(--vh, 100vh); /* --vh : fixé dans l'iframe miroir, cf. drag-swipe.js */
-  overflow-x: hidden;
-  display: flex;
-  align-items: center;
-  padding: 4rem 1.5rem;
-  border-bottom: 1px solid var(--line);
-  background-image: linear-gradient(rgba(61, 220, 132, 0.03) 1px, transparent 1px);
-  background-size: 100% 2px;
-}
-
-/* Étage avec beaucoup de contenu : hauteur fixe (même valeur des deux
-   côtés Façade/Machine) plutôt qu'une mesure dynamique en JS — celle-ci
-   provoquait un léger redimensionnement après l'affichage de la page
-   (donc un flash) le temps que l'échange avec le site miroir se termine.
-   Valeurs mesurées en largeur mobile (390px, l'un des deux textes y
-   passe à plus de lignes qu'en desktop) + marge, pas seulement en
-   desktop — sinon l'écart réapparaît sur mobile dès que le retour à la
-   ligne change. */
-.floor[data-floor-id="experiences"] {
-  min-height: 2350px;
-}
-
-/* Même principe pour "compétences" : les deux tons ont un contenu de
-   longueur assez différente (liste vs bloc YAML) pour créer un écart de
-   hauteur notable, ce qui décalait la correspondance de fraction de
-   scroll entre les deux sites dès qu'on passait de l'un à l'autre. */
-.floor[data-floor-id="competences"] {
-  min-height: 860px;
-}
-
-/* Idem pour le hero : le texte d'intro n'a pas la même longueur en FR/EN
-   selon le ton, ce qui décalait déjà légèrement tous les étages suivants. */
-.floor[data-floor-id="hero"] {
-  min-height: 950px;
-}
-
-/* "À propos" n'avait jusqu'ici aucune hauteur forcée : sur mobile, le
-   texte anglais (plus long à cette largeur) déborde du premier écran
-   alors que la version FR y tient encore, ce qui décale tout le reste
-   du scroll par fraction. */
-.floor[data-floor-id="apropos"] {
-  min-height: 760px;
-}
-
-.floor-inner {
-  max-width: 680px;
-  margin: 0 auto;
-  transform: translateX(var(--drag-x));
-  transition: transform 0.05s linear;
-}
-
-.floor[data-floor-id="hero"] .floor-inner {
-  max-width: 800px;
-}
-
-.hero-layout {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-}
-
-.hero-text {
-  min-width: 0;
-}
-
-@media (max-width: 640px) {
-  .hero-layout {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-body.dragging .floor-inner,
-body.dragging #mirror-frame {
-  transition: none;
-}
-
-body.dragging {
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: grabbing;
-}
-
-body.settling .floor-inner {
-  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-font-smoothing: antialiased;
 }
 
 #floors {
   padding-top: var(--bar-height);
   transition: opacity 0.18s ease;
 }
-
 #floors.lang-fading {
   opacity: 0;
 }
-
-#mirror-frame {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  border: none;
-  z-index: 60;
+.floor {
+  position: relative;
+  overflow: hidden;
+}
+.floor-inner {
+  position: relative;
+}
+.plate {
+  position: relative;
+  margin: 0 auto;
+}
+.plate-svg,
+.plate-over {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.plate-over {
   pointer-events: none;
-  /* Promeut l'iframe sur son propre calque GPU dès sa création, pas au
-     premier vrai drag : sans ça, le tout premier transform anime un
-     calque pas encore rasterisé, et la peinture (dont le bandeau du
-     haut) peut arriver en retard d'une frame ou deux — constaté comme
-     "pas de bandeau au premier essai, mais oui au deuxième". */
-  will-change: transform;
-  background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
+}
+.plate > div {
+  position: absolute;
 }
 
-.prompt {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
+/* ---------- typo ---------- */
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+  font-weight: 400;
+}
+h1 {
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+h1::after {
+  content: "_";
+  color: var(--amber);
+}
+h2 {
+  font-size: 26px;
+  font-weight: 600;
+  color: #fff;
+  margin: 10px 0 10px;
+}
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+}
+b {
+  font-weight: 600;
+  color: var(--amber);
+}
+i {
+  color: var(--dim);
+}
+.name {
+  color: var(--cyan);
+  font-size: 14px;
+  margin-top: 8px;
+}
+.subtitle {
+  color: var(--dim);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.prose {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.prose.small {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #bcd6f2;
+}
+.lede {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.legend,
+.note {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #9fc0e2;
+  border-left: 2px solid var(--amber);
+  padding-left: 10px;
+}
+.ringstep {
+  font-size: 12.5px;
+  color: var(--green);
+  margin-top: 10px;
 }
 
-.prompt::before {
+/* ---------- cartouches techniques ---------- */
+.spec {
+  background: rgba(10, 28, 52, 0.9);
+  border: 1px solid rgba(150, 200, 255, 0.55);
+  padding: 14px 18px;
+  overflow: hidden;
+}
+.spec::before,
+.spec::after {
   content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-color: var(--cyan);
+  border-style: solid;
 }
-
+.spec::before {
+  left: -1px;
+  top: -1px;
+  border-width: 2px 0 0 2px;
+}
+.spec::after {
+  right: -1px;
+  bottom: -1px;
+  border-width: 0 2px 2px 0;
+}
+.spec-h {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -14px -18px 10px;
+  padding: 5px 18px;
+  border-bottom: 1px solid rgba(150, 200, 255, 0.35);
+  background: rgba(95, 214, 255, 0.07);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+.spec-h span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spec-h span + span {
+  color: var(--dim);
+  flex-shrink: 0;
+}
+.hero-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: flex-start;
+  padding: 14px 26px 22px;
+}
+.hero-card .spec-h {
+  margin: -14px -26px 8px;
+  padding: 6px 26px;
+}
+.hero-id {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.photo-wrap {
+  position: relative;
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px dashed var(--dim);
+}
+.photo-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  background: linear-gradient(var(--cyan), var(--cyan)) 50% 0 / 1px 100% no-repeat, linear-gradient(var(--cyan), var(--cyan)) 0 50% / 100% 1px no-repeat;
+  opacity: 0.35;
+}
 .profile-photo {
   display: block;
-  flex-shrink: 0;
-  width: 176px;
-  height: 176px;
   object-fit: cover;
-  border-radius: 8px;
+  filter: grayscale(1) contrast(1.15) brightness(0.95) sepia(1) hue-rotate(165deg) saturate(2.2);
 }
-
-h1 {
-  font-size: clamp(1.8rem, 5vw, 2.6rem);
-  margin: 0 0 0.5rem;
-  color: var(--accent);
-}
-
-h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-  color: var(--accent);
-}
-
-.subtitle {
-  font-size: 1rem;
-  color: var(--muted);
-  margin: 0 0 1.5rem;
-}
-
-.lede {
-  color: var(--ink);
-}
-
 .quick-contacts {
-  margin-top: 2rem;
   display: flex;
-  gap: 1.2rem;
+  gap: 8px;
   flex-wrap: wrap;
 }
-
 .quick-contacts a {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  opacity: 0.85;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--line);
+  text-decoration: none;
+  border: 1px solid rgba(150, 200, 255, 0.5);
+  background: rgba(95, 214, 255, 0.06);
 }
-
 .quick-contacts a:hover {
-  opacity: 1;
-  background: var(--accent);
-  color: var(--bg);
+  border-color: var(--amber);
+  color: var(--amber);
 }
 
-.timeline article {
-  margin-bottom: 2rem;
+.value {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.value.al-c {
+  align-items: center;
+  text-align: center;
+}
+.value.al-r {
+  align-items: flex-end;
+  text-align: right;
+}
+.value-k {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.value-t {
+  color: var(--amber);
+  word-break: break-word;
+}
+.side p {
+  font-size: 12.5px;
+  margin-bottom: 6px;
+  color: #bcd6f2;
+}
+.leafcard {
+  padding: 8px 10px;
+}
+.leafcard::before,
+.leafcard::after {
+  width: 6px;
+  height: 6px;
+}
+.leaf-k {
+  color: var(--cyan);
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+.leaf-v {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #c6dcf3;
+}
+.leaf-v span {
+  display: block;
 }
 
-.timeline h3 {
-  margin: 0 0 0.25rem;
-  color: var(--ink);
-  font-size: 1rem;
+.stop {
+  padding: 12px 16px 10px;
 }
-
-.meta {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
+.stop.branch {
+  border-style: dashed;
 }
-
-.skills {
-  list-style: none;
+.stop.plain {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.stop.plain::before,
+.stop.plain::after {
+  display: none;
+}
+.stop .spec-h {
+  margin: -12px -16px 8px;
+  padding: 5px 16px;
+}
+.stop-dates {
+  color: var(--amber);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.stop .meta {
+  color: var(--dim);
+  font-size: 12px;
+  margin: 3px 0 6px;
+}
+.stop-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c6dcf3;
+}
+.colophon {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.colophon h2 {
+  font-size: 34px;
+  margin: 0;
+}
+.colophon h2::before {
+  content: "<";
+  color: var(--dim);
+}
+.colophon h2::after {
+  content: ">";
+  color: var(--dim);
+}
+.colophon .note {
+  border: none;
   padding: 0;
 }
 
-.skills li {
-  padding: 0.5rem 0;
-  border-bottom: 1px dashed var(--line);
-  font-size: 0.95rem;
+/* ---------- plan SVG ---------- */
+.t {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--line);
+}
+.t-zone {
+  fill: var(--dim);
+  font-size: 10px;
+}
+.t-town {
+  font-size: 12px;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+}
+.tlink:hover .t-town {
+  fill: var(--amber);
+}
+.t-here {
+  fill: var(--amber);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+}
+.t-small {
+  font-size: 10px;
+  fill: var(--dim);
+}
+.t-title {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  fill: var(--cyan);
+}
+.t-dim {
+  font-size: 10px;
+  fill: var(--cyan);
+}
+.t-tier {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  fill: var(--dim);
+}
+.t-sw {
+  font-size: 11px;
+  fill: var(--cyan);
+}
+.t-gpu {
+  font-size: 11px;
+  fill: #fff;
+}
+.t-hop {
+  font-size: 11px;
+  fill: var(--amber);
+}
+.t-cap {
+  font-size: 10.5px;
+  fill: var(--cyan);
+}
+.t-chip {
+  font-size: 8px;
+  fill: var(--bg);
+  font-weight: 600;
+}
+.t-cert {
+  font-size: 26px;
+  font-weight: 600;
+  fill: var(--amber);
+}
+.bp-fill {
+  fill: rgba(8, 22, 42, 0.55);
+}
+.domain {
+  fill: rgba(95, 214, 255, 0.05);
+  stroke: var(--cyan);
+  stroke-width: 1.3;
+  stroke-dasharray: 8 4 2 4;
+}
+.ring-off {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.link {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1.1;
+  stroke-dasharray: 4 3;
+}
+.bb-glow {
+  fill: none;
+  stroke: rgba(95, 214, 255, 0.14);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+.bb {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.bb-core {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 1.2;
+  stroke-dasharray: 6 5;
+}
+.bb2 {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+.sw {
+  fill: var(--bg-2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.sw.core {
+  stroke: var(--cyan);
+  stroke-width: 1.4;
+}
+.sw.orch {
+  stroke: var(--amber);
+}
+.port {
+  fill: var(--green);
+}
+.nd {
+  fill: var(--bg-2);
+  stroke: var(--line);
+  stroke-width: 0.9;
+}
+.nd.gpu {
+  stroke: var(--amber);
+}
+.nd.leaf {
+  stroke: var(--cyan);
+  stroke-width: 1.4;
+}
+.nd.src {
+  stroke: var(--amber);
+}
+.led {
+  fill: var(--green);
+}
+.svc {
+  fill: var(--bg);
+  stroke: #fff;
+  stroke-width: 1.4;
+}
+.svc-i {
+  fill: var(--cyan);
+}
+.cross {
+  stroke: var(--cyan);
+  stroke-width: 1;
+}
+.here {
+  stroke: var(--amber);
+  stroke-width: 1.4;
+}
+.ring-mini {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.fr-o {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.6;
+}
+.fr-i,
+.fr-t {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 0.8;
+}
+.dim,
+.dim-a {
+  stroke: var(--cyan);
+  stroke-width: 1;
+  fill: none;
+}
+.dim-a {
+  fill: var(--cyan);
+  stroke: none;
+}
+.ring-guide {
+  fill: none;
+  stroke: var(--faint);
+  stroke-dasharray: 1 5;
+}
+.ray-guide {
+  stroke: var(--faint);
+  stroke-width: 0.7;
+}
+.ring-tl {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1;
+}
+.tick {
+  stroke: var(--dim);
+  stroke-width: 0.8;
+}
+.nvl {
+  stroke: var(--cyan);
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.spoke {
+  stroke: var(--faint);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+}
+.gpu-box {
+  fill: var(--bg-2);
+  stroke: #fff;
+  stroke-width: 1.3;
+}
+.fdomain {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+.tier {
+  stroke: var(--faint);
+  stroke-dasharray: 10 6;
+}
+.fl {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1;
+}
+.fl.t1 {
+  stroke: var(--cyan);
+  stroke-width: 1.3;
+  opacity: 0.8;
+}
+.wan {
+  stroke: none;
+}
+.hatch {
+  stroke: rgba(95, 214, 255, 0.22);
+  stroke-width: 1;
+}
+.wan-edge {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.2;
+  stroke-dasharray: 8 4;
+}
+.dots {
+  stroke: var(--faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.leader {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1;
+}
+.leader-d {
+  fill: var(--cyan);
+}
+.vig-rule {
+  stroke: var(--faint);
+  stroke-dasharray: 2 3;
+}
+.cell {
+  fill: rgba(95, 214, 255, 0.18);
+  stroke: var(--cyan);
+  stroke-width: 0.5;
+}
+.cell.gpu {
+  fill: rgba(255, 182, 72, 0.25);
+  stroke: var(--amber);
+}
+.cell.h100 {
+  fill: var(--cyan);
+  stroke: none;
+  opacity: 0.75;
+}
+.cell.old {
+  fill: var(--dim);
+  stroke: none;
+  opacity: 0.6;
+}
+.cell.arm {
+  fill: rgba(115, 242, 176, 0.25);
+  stroke: var(--green);
+}
+.cell.aws {
+  fill: rgba(255, 182, 72, 0.2);
+  stroke: var(--amber);
+}
+.vbox {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.vbox.cloud {
+  stroke: var(--amber);
+  stroke-dasharray: 4 3;
+}
+.mc {
+  stroke: var(--dim);
+  stroke-width: 0.8;
+}
+.bar {
+  fill: rgba(255, 107, 94, 0.5);
+  stroke: var(--red);
+}
+.bar.ok {
+  fill: rgba(115, 242, 176, 0.5);
+  stroke: var(--green);
+}
+.chip {
+  fill: var(--cyan);
+  stroke: #fff;
+}
+.pins {
+  stroke: var(--cyan);
+  stroke-width: 1.5;
+}
+.wanl {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 1.4;
+  stroke-dasharray: 10 4 2 4;
+}
+.cert {
+  fill: rgba(255, 182, 72, 0.08);
+  stroke: var(--amber);
+  stroke-width: 1.5;
+}
+.cert-i {
+  fill: none;
+  stroke: var(--amber);
+  stroke-dasharray: 2 3;
 }
 
-.skills li strong {
-  color: var(--accent);
+/* ---------- paquets (transform seulement, composités) ---------- */
+.plate > .mover {
+  left: 0;
+  top: 0;
+  pointer-events: none;
 }
-
-.cv-download {
-  display: inline-block;
-  margin-top: 2rem;
-  padding: 0.6rem 1.2rem;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  text-decoration: none;
+.trail {
+  width: 0;
+  height: 0;
+}
+.trail i {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px 2px rgba(95, 214, 255, 0.8);
+  will-change: transform;
+}
+.trail i:nth-child(2) {
+  opacity: 0.45;
+  box-shadow: none;
+}
+.trail i:nth-child(3) {
+  opacity: 0.2;
+  box-shadow: none;
+}
+.trail.amber i {
+  background: var(--amber);
+  box-shadow: 0 0 10px 3px rgba(255, 182, 72, 0.8);
+}
+.trail.amber i:nth-child(n + 2) {
+  box-shadow: none;
+}
+.trail.big i {
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+}
+.chunk {
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
   border-radius: 2px;
+  will-change: transform;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+.c0 { background: #5fd6ff; }
+.c1 { background: #73f2b0; }
+.c2 { background: #ffb648; }
+.c3 { background: #ff6b5e; }
+.c4 { background: #b48cff; }
+.c5 { background: #fff27a; }
+.c6 { background: #ff8fd0; }
+.c7 { background: #9fe0ff; }
+
+/* ---------- étroit (mobile) ---------- */
+.plate-n h1 {
+  font-size: 36px;
+}
+.plate-n h2 {
+  font-size: 22px;
+}
+.plate-n .hero-card {
+  padding: 12px 16px 16px;
+  gap: 12px;
+}
+.plate-n .hero-card .spec-h {
+  margin: -12px -16px 6px;
+  padding: 6px 16px;
+}
+.plate-n .hero-id {
+  gap: 14px;
+}
+.plate-n .lede,
+.plate-n .prose {
+  font-size: 13px;
+}
+.plate-n .spec {
+  padding: 12px 14px;
+}
+.plate-n .spec-h {
+  margin: -12px -14px 8px;
+  padding: 5px 14px;
+}
+.plate-n .leafcard {
+  padding: 8px 10px;
+}
+.plate-n .leaf-v span {
+  display: inline;
+}
+.plate-n .leaf-v span + span::before {
+  content: " ";
+}
+.plate-n .stop-text {
+  font-size: 12.5px;
 }
 
-/* Bandeau plein écran plutôt que deux boutons flottants isolés : sur
-   mobile, un bouton flottant se retrouvait au-dessus du texte des
-   étages, jamais parfaitement aligné entre la page réelle et l'aperçu
-   iframe pendant le drag (fixed = relatif au viewport de CHAQUE
-   document). Un bandeau de la couleur de fond, à la même hauteur des
-   deux côtés, élimine ce décalage visuel au moment de la bascule. */
+/* ---------- bandeau ---------- */
 .site-bar {
   position: fixed;
   top: 0;
@@ -290,45 +855,135 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1rem;
+  gap: 10px;
+  padding: 0 14px;
   background: var(--bg);
+  border-bottom: 1px solid rgba(150, 200, 255, 0.45);
 }
-
+.plate-name {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .mirror-hint,
 .lang-switch {
-  font-family: inherit;
-  font-size: 0.75rem;
+  font-family: var(--mono);
+  font-size: 12px;
   background: transparent;
-  /* Couleur opaque pré-mélangée plutôt qu'un accent à 100% + opacity :
-     un enfant semi-transparent à l'intérieur d'un iframe cross-origin
-     soumis à un transform en continu (le drag) peut rater sa
-     recomposition sur mobile — le calque du bandeau (opaque) se
-     repeint bien, mais celui, alpha-blendé, des boutons reste parfois
-     "gelé"/invisible un instant. En restant 100% opaque ici, il n'y a
-     plus de calque semi-transparent à recomposer : plus de risque de
-     ce glitch, sur mobile comme ailleurs. */
-  border: 1px solid color-mix(in srgb, var(--accent) 75%, var(--bg));
-  color: color-mix(in srgb, var(--accent) 75%, var(--bg));
-  padding: 0.35rem 0.7rem;
-  border-radius: 2px;
+  border: 1px solid rgba(150, 200, 255, 0.6);
+  color: var(--line);
+  padding: 6px 10px;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
 }
-
+.mirror-hint {
+  border-color: var(--amber);
+  color: var(--amber);
+}
 .mirror-hint:hover,
 .lang-switch:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: rgba(255, 182, 72, 0.12);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .floor-inner {
-    transition: none;
-  }
+/* ---------- bascule ---------- */
+body.dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
 }
-
-/* Remise à zéro instantanée des calques (pagehide → bfcache), cf. drag-swipe.js */
-body.no-anim .floor-inner,
-body.no-anim #mirror-frame {
+#mirror-window {
+  position: fixed;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  z-index: 60;
+  pointer-events: none;
+  will-change: transform;
+  background: #efe4cb; /* fond Façade */
+}
+#mirror-frame {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: none;
+  z-index: 60;
+  pointer-events: none;
+  will-change: transform;
+  background: #efe4cb;
+}
+#mirror-window #mirror-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+/* Ligne de balayage, côté Machine : la carte se redéplie. Accrochée au
+   bord droit de la fenêtre (à gauche de l'écran), dessinée côté plan :
+   elle sort de l'écran quand la carte couvre tout. */
+#scan-line {
+  position: fixed;
+  top: 0;
+  width: 64px;
+  height: 100%;
+  z-index: 61;
+  pointer-events: none;
+  will-change: transform;
+  visibility: hidden;
+  background: linear-gradient(to left, rgba(239, 228, 203, 0), rgba(239, 228, 203, 0.18) 60%, rgba(166, 62, 40, 0.55) 96%, #a63e28);
+}
+#scan-line::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #2c2016;
+}
+.scan-tab {
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  width: 28px;
+  height: 56px;
+  margin-top: -28px;
+  border-radius: 0 14px 14px 0;
+  background: #efe4cb;
+  border: 1.5px solid #2c2016;
+  border-left: none;
+}
+.scan-tab::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 21px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #2c2016;
+  border-top: 2px solid #2c2016;
+  transform: rotate(45deg);
+}
+body.dragging #scan-line,
+body.settling #scan-line {
+  visibility: visible;
+}
+body.no-anim #mirror-frame,
+body.no-anim #mirror-window,
+body.no-anim #scan-line {
   transition: none !important;
+}
+.plate-n .hero-card .lede {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.plate-n .legend {
+  font-size: 11.5px;
 }
