@@ -14,6 +14,9 @@ function renderFloors(lang) {
     section.className = "floor";
     section.id = floor.id;
     section.dataset.floorId = floor.id;
+    // hauteur fixe (geo.js, identique des deux côtés) AVANT toute
+    // restauration de scroll : un même scrollY tombe au même endroit.
+    section.style.height = `${GEO.floorHeight(floor.id, GEO.layoutWidth())}px`;
     const render = floor[lang] || floor[DEFAULT_LANG];
     section.innerHTML = `<div class="floor-inner">${render()}</div>`;
     container.appendChild(section);
@@ -30,7 +33,8 @@ function updateLangButton() {
   btn.setAttribute("aria-label", currentLang === "en" ? "Passer en français" : "Switch to English");
 }
 
-const MIRROR_HINT_LABEL = { fr: "Mode humain", en: "Human mode" };
+// Machine → Façade : la carte se redéplie par-dessus le plan.
+const MIRROR_HINT_LABEL = { fr: "← La carte", en: "← The map" };
 
 function updateMirrorHint() {
   const link = document.getElementById("mirror-hint");
@@ -54,8 +58,23 @@ function toggleLanguage() {
   }, 180);
 }
 
+// Les planches sont dessinées en px pour la largeur de mise en page (même
+// valeur dans l'iframe miroir et sur la page d'arrivée). Elles ne sont
+// redessinées que si cette LARGEUR change (rotation, fenêtre) — jamais
+// pour un simple changement de hauteur (barre d'adresse mobile).
+let renderedWidth = 0;
+function renderIfWidthChanged() {
+  const w = GEO.layoutWidth();
+  if (w !== renderedWidth) {
+    renderedWidth = w;
+    renderFloors(currentLang);
+  }
+}
+
 function initLang() {
+  renderedWidth = GEO.layoutWidth();
   renderFloors(currentLang);
+  window.addEventListener("resize", renderIfWidthChanged);
   updateLangButton();
   updateMirrorHint();
   document.getElementById("lang-switch").addEventListener("click", toggleLanguage);

@@ -1,285 +1,185 @@
+/* Machine « le calcul qui fait la mer ».
+   Police : JetBrains Mono (OFL) 400/700, subsettée, inlinée par build.mjs. */
+@font-face {
+  font-family: "JB Mono";
+  src: url(../assets/jbmono-400.woff2) format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "JB Mono";
+  src: url(../assets/jbmono-700.woff2) format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
 :root {
   --drag-x: 0px;
-  --bg: #0b0e0c;
-  --ink: #d6f5df;
-  --accent: #3ddc84;
-  --muted: #6f9e80;
-  --line: #1c2620;
-  /* Même valeur des deux côtés Façade/Machine : c'est ce qui garantit
-     que le bandeau tombe exactement à la même hauteur dans l'aperçu
-     iframe pendant le drag. */
-  --bar-height: 3.25rem;
+  --bg: #020604;
+  --mesh: #0d3a1e;
+  --line: #1d6b3d;
+  --text: #c8f5d8;
+  --dim: #6fae86;
+  --cy: #39ff88;
+  --r0: #4f7dff;
+  --r1: #22e0c0;
+  --r2: #ffb01f;
+  --r3: #ff4f5e;
+  --bar-height: 52px;
+  --mono: "JB Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  overflow-x: hidden;
-  scrollbar-width: none; /* Firefox */
-}
-
-html::-webkit-scrollbar {
-  width: 0;
-  height: 0; /* Chrome/Safari, aussi masqué à l'intérieur de l'iframe miroir */
-}
-
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { background: var(--bg); }
 body {
   background: var(--bg);
-  color: var(--ink);
-  font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
-  line-height: 1.6;
-  /* pan-y : scroll vertical natif (fluide, avec inertie). Le swipe
-     horizontal est géré par des Touch Events dédiés (cf. drag-swipe.js)
-     qui interceptent proprement le geste — voir le commentaire détaillé
-     là-bas avant de retoucher à cette valeur. */
-  touch-action: pan-y;
-  overscroll-behavior-x: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.55;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.floor {
-  /* min-height (pas height fixe) : un étage court reste calé sur un
-     plein écran, mais un étage avec beaucoup de contenu (ex.
-     expériences) grandit automatiquement au lieu d'être coupé avec un
-     ascenseur interne. Le raccord de scroll entre Façade et Machine se
-     fait par fraction (0–1), donc un léger écart de hauteur naturelle
-     entre les deux versions du même étage n'introduit pas de décalage
-     perceptible.  */
-  min-height: var(--vh, 100vh); /* --vh : fixé dans l'iframe miroir, cf. drag-swipe.js */
-  overflow-x: hidden;
-  display: flex;
-  align-items: center;
-  padding: 4rem 1.5rem;
-  border-bottom: 1px solid var(--line);
-  background-image: linear-gradient(rgba(61, 220, 132, 0.03) 1px, transparent 1px);
-  background-size: 100% 2px;
-}
+#sea, #fx { position: fixed; left: 0; top: 0; pointer-events: none; }
+#sea { z-index: 0; }
+#fx { z-index: 2; }
+#clouds { position: fixed; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+#clouds .cloud { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
+#clouds .cloud svg { display: block; overflow: visible; }
+#clouds .fog { position: absolute; inset: 0; opacity: 0; will-change: opacity; background: linear-gradient(rgba(57, 255, 136, 0.07) 1px, transparent 1px) 0 0 / 100% 24px, linear-gradient(90deg, rgba(57, 255, 136, 0.07) 1px, transparent 1px) 0 0 / 24px 100%, #020604; }
+#clouds .fog::after { content: "cloud.layer · traversing"; position: absolute; left: 50%; top: 46%; transform: translateX(-50%); font-family: var(--mono); font-size: 12px; color: var(--cy); letter-spacing: .2em; }
+.inset { position: absolute; z-index: 3; background: rgba(2, 6, 4, 0.92); border: 1px solid var(--line); }
+.inset .ship svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.inset .ship text { font-family: var(--mono); font-size: 9px; fill: var(--cy); text-anchor: middle; }
+.inset-title { position: absolute; left: 12px; top: 8px; margin: 0; font-size: 11px; color: var(--dim); }
+.part { position: absolute; z-index: 1; font-size: 11px; color: var(--cy); white-space: nowrap; background: rgba(2, 6, 4, .85); padding: 0 3px; }
+.winds em { font-style: normal; color: var(--dim); font-weight: 400; }
 
-/* Étage avec beaucoup de contenu : hauteur fixe (même valeur des deux
-   côtés Façade/Machine) plutôt qu'une mesure dynamique en JS — celle-ci
-   provoquait un léger redimensionnement après l'affichage de la page
-   (donc un flash) le temps que l'échange avec le site miroir se termine.
-   Valeurs mesurées en largeur mobile (390px, l'un des deux textes y
-   passe à plus de lignes qu'en desktop) + marge, pas seulement en
-   desktop — sinon l'écart réapparaît sur mobile dès que le retour à la
-   ligne change. */
-.floor[data-floor-id="experiences"] {
-  min-height: 2350px;
-}
+#floors { position: relative; transition: opacity 0.18s; }
+#floors.lang-fading { opacity: 0; }
+.floor { position: relative; overflow: hidden; }
+.floor-inner { position: absolute; inset: 0; }
+.isle-layer { position: absolute; left: 0; top: 0; z-index: 1; overflow: visible; }
+.isle-layer text { font-family: var(--mono); text-anchor: middle; }
+.isle-layer .lbl { font-size: 10.5px; fill: var(--cy); text-anchor: middle; }
+.isle-layer .dim { font-size: 10.5px; fill: var(--dim); }
+.isle-layer .tiny { font-size: 8px; fill: var(--dim); text-anchor: start; }
 
-/* Même principe pour "compétences" : les deux tons ont un contenu de
-   longueur assez différente (liste vs bloc YAML) pour créer un écart de
-   hauteur notable, ce qui décalait la correspondance de fraction de
-   scroll entre les deux sites dès qu'on passait de l'un à l'autre. */
-.floor[data-floor-id="competences"] {
-  min-height: 860px;
+.card, .tag, .sky-title, .scroll-hint, .layer-mark { position: absolute; z-index: 3; }
+.card {
+  background: rgba(2, 6, 4, 0.9);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 0 1px rgba(5, 11, 20, 0.6);
 }
-
-/* Idem pour le hero : le texte d'intro n'a pas la même longueur en FR/EN
-   selon le ton, ce qui décalait déjà légèrement tous les étages suivants. */
-.floor[data-floor-id="hero"] {
-  min-height: 950px;
-}
-
-/* "À propos" n'avait jusqu'ici aucune hauteur forcée : sur mobile, le
-   texte anglais (plus long à cette largeur) déborde du premier écran
-   alors que la version FR y tient encore, ce qui décale tout le reste
-   du scroll par fraction. */
-.floor[data-floor-id="apropos"] {
-  min-height: 760px;
-}
-
-.floor-inner {
-  max-width: 680px;
-  margin: 0 auto;
-  transform: translateX(var(--drag-x));
-  transition: transform 0.05s linear;
-}
-
-.floor[data-floor-id="hero"] .floor-inner {
-  max-width: 800px;
-}
-
-.hero-layout {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-}
-
-.hero-text {
-  min-width: 0;
-}
-
-@media (max-width: 640px) {
-  .hero-layout {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-body.dragging .floor-inner,
-body.dragging #mirror-frame {
-  transition: none;
-}
-
-body.dragging {
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: grabbing;
-}
-
-body.settling .floor-inner {
-  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-#floors {
-  padding-top: var(--bar-height);
-  transition: opacity 0.18s ease;
-}
-
-#floors.lang-fading {
-  opacity: 0;
-}
-
-#mirror-frame {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  border: none;
-  z-index: 60;
-  pointer-events: none;
-  /* Promeut l'iframe sur son propre calque GPU dès sa création, pas au
-     premier vrai drag : sans ça, le tout premier transform anime un
-     calque pas encore rasterisé, et la peinture (dont le bandeau du
-     haut) peut arriver en retard d'une frame ou deux — constaté comme
-     "pas de bandeau au premier essai, mais oui au deuxième". */
-  will-change: transform;
-  background: #f7f5f2; /* fond de la Façade, évite tout flash pendant que l'iframe charge */
-}
-
-.prompt {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
-}
-
-.prompt::before {
+.card::before, .card::after {
   content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 0 solid var(--cy);
 }
-
-.profile-photo {
-  display: block;
-  flex-shrink: 0;
-  width: 176px;
-  height: 176px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-h1 {
-  font-size: clamp(1.8rem, 5vw, 2.6rem);
-  margin: 0 0 0.5rem;
-  color: var(--accent);
-}
-
-h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-  color: var(--accent);
-}
-
-.subtitle {
-  font-size: 1rem;
-  color: var(--muted);
-  margin: 0 0 1.5rem;
-}
-
-.lede {
-  color: var(--ink);
-}
-
-.quick-contacts {
-  margin-top: 2rem;
+.card::before { left: -1px; top: -1px; border-left-width: 2px; border-top-width: 2px; }
+.card::after { right: -1px; bottom: -1px; border-right-width: 2px; border-bottom-width: 2px; }
+.card .bar {
   display: flex;
-  gap: 1.2rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--cy);
+  background: rgba(13, 58, 30, 0.35);
 }
+.card .body { padding: 14px 16px 14px; }
+.card h2 { margin: 0 0 10px; font-size: 22px; line-height: 1.15; font-weight: 700; color: #ffffff; }
+.card h2::before { content: "§ "; color: var(--r1); }
+.card p { margin: 0 0 10px; }
+.job { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.card h2 + .job { margin-top: 0; padding-top: 0; border-top: none; }
+.job .when { margin: 0; font-size: 11.5px; color: var(--r2); }
+.job h3 { margin: 2px 0 0; font-size: 14.5px; line-height: 1.3; color: #fff; }
+.job .where { margin: 2px 0 6px; font-size: 12px; color: var(--dim); }
+.job p:last-child { margin-bottom: 0; }
 
-.quick-contacts a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  opacity: 0.85;
-  transition: opacity 0.15s ease, background 0.15s ease;
-}
-
-.quick-contacts a:hover {
-  opacity: 1;
-  background: var(--accent);
+.tag {
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 2px 6px;
   color: var(--bg);
+  background: var(--cy);
+  pointer-events: none;
+}
+.tag.small { font-size: 10px; padding: 1px 5px; background: var(--line); color: var(--text); }
+.tag.it { background: rgba(5, 11, 20, 0.85); color: var(--cy); border: 1px solid var(--line); }
+
+.layer-mark {
+  left: 4px;
+  margin: 0;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--r1);
+  white-space: nowrap;
+}
+.layer-mark span { padding: 6px 2px; border-right: 2px solid var(--r1); background: rgba(5, 11, 20, 0.8); }
+
+/* hero : textes au-dessus des nuages (#clouds, z 6) */
+.sky-title, .card.about, .scroll-hint { z-index: 7; }
+.sky-title p, .sky-title h1 { text-shadow: 0 0 4px #020604, 0 0 10px #020604; }
+.sky-title { pointer-events: none; }
+.sky-title .prompt { margin: 0; color: var(--r1); font-size: 13px; }
+.sky-title h1 { margin: 6px 0 8px; font-size: 96px; line-height: 0.95; letter-spacing: -0.04em; font-weight: 700; color: #fff; text-shadow: 0 0 24px rgba(57, 255, 136, 0.35); }
+.sky-title .sub { margin: 0 0 12px; color: var(--cy); font-size: 15px; }
+.sky-title .lede { margin: 0; max-width: 640px; font-size: 14px; color: var(--text); }
+.scroll-hint { left: 0; right: 0; top: 812px; margin: 0; text-align: center; font-size: 12px; color: var(--cy); }
+.hud { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(18, 50, 79, 0.25); font-size: 12px; }
+.hud p { margin: 0 0 4px; }
+.hud b { color: var(--dim); font-weight: 400; }
+.hud span[data-hud] { color: #fff; font-variant-numeric: tabular-nums; }
+.bars { display: flex; height: 8px; margin: 8px 0 4px; background: #0a1a2a; }
+.bars i { display: block; height: 100%; width: 25%; }
+.bars i:nth-child(1) { background: var(--r0); }
+.bars i:nth-child(2) { background: var(--r1); }
+.bars i:nth-child(3) { background: var(--r2); }
+.bars i:nth-child(4) { background: var(--r3); }
+.ranks { display: flex; justify-content: space-between; font-size: 10.5px; margin: 0 !important; }
+.r0 { color: var(--r0); } .r1 { color: var(--r1); } .r2 { color: var(--r2); } .r3 { color: var(--r3); }
+.w4 { color: var(--cy); }
+.note { font-size: 12px; color: var(--dim); }
+
+/* forces */
+.winds { list-style: none; margin: 4px 0 10px; padding: 0; }
+.winds li { padding: 6px 0; border-top: 1px dashed var(--line); }
+.winds b { display: block; font-size: 13px; }
+.winds span { font-size: 12px; color: var(--text); }
+.readup { font-size: 12px; color: var(--dim); margin-bottom: 0 !important; }
+
+/* contact */
+.card .big { font-size: 16px; color: var(--r1); }
+.links { display: grid; gap: 8px; }
+.links a { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; padding: 9px 12px; color: var(--text); text-decoration: none; border: 1px solid var(--line); background: rgba(18, 50, 79, 0.3); }
+.links a small { color: var(--dim); }
+.links a:hover { border-color: var(--r1); color: #fff; }
+
+@media (max-width: 759px) {
+  body { font-size: 12.5px; }
+  .card .body { padding: 12px 13px; }
+  .card h2 { font-size: 19px; }
+  .sky-title h1 { font-size: 64px; }
+  .sky-title .sub { font-size: 13px; }
+  .sky-title .lede { font-size: 12.5px; }
+  .scroll-hint { top: 760px; font-size: 11px; padding: 0 16px; }
+  .layer-mark { left: 1px; font-size: 9.5px; }
 }
 
-.timeline article {
-  margin-bottom: 2rem;
-}
-
-.timeline h3 {
-  margin: 0 0 0.25rem;
-  color: var(--ink);
-  font-size: 1rem;
-}
-
-.meta {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
-}
-
-.skills {
-  list-style: none;
-  padding: 0;
-}
-
-.skills li {
-  padding: 0.5rem 0;
-  border-bottom: 1px dashed var(--line);
-  font-size: 0.95rem;
-}
-
-.skills li strong {
-  color: var(--accent);
-}
-
-.cv-download {
-  display: inline-block;
-  margin-top: 2rem;
-  padding: 0.6rem 1.2rem;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  text-decoration: none;
-  border-radius: 2px;
-}
-
-/* Bandeau plein écran plutôt que deux boutons flottants isolés : sur
-   mobile, un bouton flottant se retrouvait au-dessus du texte des
-   étages, jamais parfaitement aligné entre la page réelle et l'aperçu
-   iframe pendant le drag (fixed = relatif au viewport de CHAQUE
-   document). Un bandeau de la couleur de fond, à la même hauteur des
-   deux côtés, élimine ce décalage visuel au moment de la bascule. */
+/* bandeau */
 .site-bar {
   position: fixed;
   top: 0;
@@ -290,45 +190,50 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1rem;
-  background: var(--bg);
+  gap: 10px;
+  padding: 0 14px;
+  background: rgba(5, 11, 20, 0.96);
+  border-bottom: 1px solid var(--line);
 }
-
-.mirror-hint,
-.lang-switch {
-  font-family: inherit;
-  font-size: 0.75rem;
+.brand { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand i { font-style: normal; color: var(--dim); }
+.mirror-hint, .lang-switch {
+  font-family: var(--mono);
+  font-size: 12px;
   background: transparent;
-  /* Couleur opaque pré-mélangée plutôt qu'un accent à 100% + opacity :
-     un enfant semi-transparent à l'intérieur d'un iframe cross-origin
-     soumis à un transform en continu (le drag) peut rater sa
-     recomposition sur mobile — le calque du bandeau (opaque) se
-     repeint bien, mais celui, alpha-blendé, des boutons reste parfois
-     "gelé"/invisible un instant. En restant 100% opaque ici, il n'y a
-     plus de calque semi-transparent à recomposer : plus de risque de
-     ce glitch, sur mobile comme ailleurs. */
-  border: 1px solid color-mix(in srgb, var(--accent) 75%, var(--bg));
-  color: color-mix(in srgb, var(--accent) 75%, var(--bg));
-  padding: 0.35rem 0.7rem;
-  border-radius: 2px;
+  border: 1px solid var(--line);
+  color: var(--cy);
+  padding: 5px 10px;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
 }
+.mirror-hint { border-color: var(--r1); color: var(--r1); }
+.mirror-hint:hover, .lang-switch:hover { background: var(--r1); color: var(--bg); }
+@media (max-width: 420px) { .brand i { display: none; } }
 
-.mirror-hint:hover,
-.lang-switch:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+/* bascule (calques de drag-swipe.js) */
+body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+#mirror-window { position: fixed; left: 0; top: 0; overflow: hidden; z-index: 60; pointer-events: none; will-change: transform; background: #f4ecda; }
+#mirror-frame { position: fixed; inset: 0; width: 100vw; height: 100vh; border: none; z-index: 60; pointer-events: none; will-change: transform; background: #f4ecda; }
+#mirror-window #mirror-frame { position: absolute; left: 0; top: 0; }
+/* Ligne de scan dessinée comme un BALAYAGE DE MONITEUR : bande phosphore
+   à lignes de trame, du côté du plan quitté. */
+#scan-line {
+  position: fixed;
+  top: 0;
+  width: 70px;
+  height: 100%;
+  z-index: 61;
+  pointer-events: none;
+  will-change: transform;
+  visibility: hidden;
+  background:
+    repeating-linear-gradient(to bottom, rgba(5, 11, 20, 0.55) 0 1px, rgba(5, 11, 20, 0) 1px 3px),
+    linear-gradient(to left, rgba(57, 255, 136, 0), rgba(57, 255, 136, 0.16) 60%, rgba(57, 255, 136, 0.75) 96%, #d8ffe6);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .floor-inner {
-    transition: none;
-  }
-}
-
-/* Remise à zéro instantanée des calques (pagehide → bfcache), cf. drag-swipe.js */
-body.no-anim .floor-inner,
-body.no-anim #mirror-frame {
-  transition: none !important;
-}
+#scan-line::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #eaffff; box-shadow: 0 0 12px 3px rgba(57, 255, 136, 0.9); }
+.scan-tab { position: absolute; left: -1px; top: 50%; width: 28px; height: 56px; margin-top: -28px; background: var(--bg); border: 1px solid var(--r1); border-left: none; }
+.scan-tab::after { content: ""; position: absolute; left: 7px; top: 21px; width: 9px; height: 9px; border-right: 2px solid var(--r1); border-top: 2px solid var(--r1); transform: rotate(45deg); }
+body.dragging #scan-line, body.settling #scan-line { visibility: visible; }
+body.no-anim #mirror-frame, body.no-anim #mirror-window, body.no-anim #scan-line { transition: none !important; }
