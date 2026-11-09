@@ -382,11 +382,11 @@ float swell(vec2 p,float fw,out vec2 g){vec4 ph=uKx*p.x+uKy*p.y-uPh;vec4 k=sqrt(
 vec4 A=uA*clamp(1.6-fw*k*1.2,0.,1.);vec4 s=sin(ph);g=vec2(-dot(A*s,uKx),-dot(A*s,uKy));return dot(A,cos(ph));}
 float line(float d,float w,float fw){return 1.-smoothstep(w*.5,w*.5+fw,abs(d));}
 vec3 facade(vec2 p,float fw,float far){
-float v=clamp(p.y/uDocH,0.,1.);vec4 pw=texture2D(uPal,vec2(.125,v));vec3 wash=pw.rgb;
+float v=clamp(p.y/uDocH,0.,1.);vec4 pw=texture2D(uPal,vec2(.125,v));vec3 wash=pw.rgb;float nt=texture2D(uPal,vec2(.625,v)).r;
 float d=dist(p);if(d<0.)return PAPER;
 float pig=.62+.22*(vn(p*.0045+vec2(3.1,uT*.004))-.5)+.12*(vn(p*.021)-.5);
 pig+=.38*exp(-d/9.);pig-=.14*vn(p*.42);
-vec3 col=mix(PAPER,wash,clamp(pig,0.,1.));
+vec3 col=mix(PAPER,wash,clamp(pig+nt*.5,0.,1.));
 vec2 g;float h=swell(p,fw,g);
 float off=smoothstep(26.,60.,d)*(1.-far);
 float n=vn(p*vec2(.03,.05)+vec2(uT*.06,0.));
@@ -394,19 +394,17 @@ float ink=line((h-.5)/(length(g)+1e-4),.9,fw)*smoothstep(.45,.7,n)*off;
 ink+=line((h+.1)/(length(g)+1e-4),.7,fw)*smoothstep(.62,.8,n)*off*.6;
 for(int i=1;i<4;i++){float fi=float(i);float wd=fi*8.+2.*sin(p.x*.05+fi+h*1.5);ink+=line(d-wd,.8,fw)*(.75-fi*.18)*step(.25,vn(p*.08+fi));}
 float br=smoothstep(.15,.6,h)*(1.-smoothstep(1.,6.,d));col=mix(col,PAPER*1.02,br*.85);
-col=mix(col,INK,clamp(ink,0.,1.)*.5*(1.-far));
+col=mix(col,mix(INK,vec3(.86,.88,.97),nt*.85),clamp(ink,0.,1.)*.5*(1.-far));
 col*=.975+.04*hash(floor(p*1.5));
 return col;}
 vec3 machine(vec2 p,float fw,float far){
 float W=uView.x;vec3 col=BG;float r=clamp(floor(p.x/W*4.),0.,3.);vec3 rc=rk(r);
-col+=rc*.025;vec2 cl=(floor(p/24.)+.5)*24.;float dc=dist(cl);float d=dist(p);
+col+=rc*.025*uFlat;vec2 cl=(floor(p/24.)+.5)*24.;float dc=dist(cl);float d=dist(p);
 vec2 q=abs(fract(p/24.+.5)-.5)*24.;float gm=1.-smoothstep(0.,fw*1.1,min(q.x,q.y));
 if(dc<0.){col=mix(col,PH*.16,.6);float hx=line(fract((p.x+p.y)/8.)*8.-4.,1.,fw);col+=PH*.1*hx;col+=PH*.35*gm;}
 else{col+=PH*.11*gm*clamp(2.2-fw*.35,0.,1.);}
 vec2 Q=abs(fract(p/120.+.5)-.5)*120.;col+=PH*.16*(1.-smoothstep(0.,fw*1.2,min(Q.x,Q.y)))*clamp(2.5-fw*.15,0.,1.);
-vec2 g;float h=swell(p,fw,g);float dl=abs(fract(h*2.2+.5)-.5)/(2.2*length(g)+1e-4);
-col+=PH*.13*(1.-smoothstep(.4*fw,1.4*fw,dl))*(1.-far)*step(0.,d);
-for(int j=1;j<4;j++){float fj=float(j);float xb=W*fj/4.;float dx=abs(p.x-xb);
+for(int j=1;j<4;j++){if(uFlat<.5)break;float fj=float(j);float xb=W*fj/4.;float dx=abs(p.x-xb);
 vec3 hcol=p.x<xb?rk(fj-1.):rk(fj);col+=hcol*.04*(1.-smoothstep(uHalo-fw*.5,uHalo+fw*.5,dx));
 col+=hcol*.2*line(dx-uHalo,1.,fw)*(1.-far);col+=mix(rk(fj-1.),rk(fj),.5)*.35*line(dx,1.,fw);}
 return col;}

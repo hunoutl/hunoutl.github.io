@@ -92,12 +92,58 @@
       .join("");
   }
 
+  // v5 : les monuments de la Façade, avant rendu (mêmes chemins, GEO.glyph),
+  // tracés en fil de fer par rôle ; boîte englobante et nom d'objet.
+  const WIRE = {
+    glow: `stroke="${AMBER}" stroke-width=".9"`,
+    lava: `stroke="${AMBER}" stroke-width=".9"`,
+    tick: `stroke="${AMBER}" stroke-width="1"`,
+    water: `stroke="${rgba(RANKS[0], 0.75)}" stroke-width=".8"`,
+    glass: `stroke="${rgba(RANKS[0], 0.75)}" stroke-width=".8"`,
+    river: `stroke="${rgba(RANKS[0], 0.75)}" stroke-width="1" stroke-dasharray="4 3"`,
+    green: `stroke="${DIM}" stroke-width=".8" stroke-dasharray="2 2"`,
+    forest: `stroke="${DIM}" stroke-width=".8"`,
+    dark: `stroke="${PH}" stroke-width=".9" fill="${PH}" fill-opacity=".18"`,
+    road: `stroke="${DIM}" stroke-width="1.2"`,
+    rampart: `stroke="${PH}" stroke-opacity=".7" stroke-width="1.3" stroke-dasharray="7 3"`,
+    line: `stroke="${DIM}" stroke-width=".8"`,
+    thin: `stroke="${DIM}" stroke-width=".6"`,
+  };
+  const SKIP = { palace: 1, labs: 1, forges: 1, beltHall: 1 };
+  const NOBOX = { rampart: 1, avenues: 1, river: 1, fort: 1, forges: 1, palace: 1, labs: 1, beltHall: 1 };
+  function monuments(L, fl) {
+    const g = {};
+    let box = "";
+    const n = {};
+    for (const q of L.mons) {
+      if (q.floor !== fl.id || SKIP[q.kind]) continue;
+      for (const [r, d] of GEO.glyph(q)) (g[r] || (g[r] = [])).push(d);
+      if (NOBOX[q.kind]) continue;
+      const i = (n[q.kind] = (n[q.kind] || 0) + 1) - 1;
+      box += `<rect x="${f1(q.x - q.w / 2)}" y="${f1(q.y - q.h / 2)}" width="${f1(q.w)}" height="${f1(q.h)}" fill="none" stroke="${DIM}" stroke-width=".7" stroke-dasharray="2 3"/>`;
+      if (q.w > 30) box += `<text x="${f1(q.x - q.w / 2)}" y="${f1(q.y - q.h / 2 - 3)}" class="tiny">${q.kind}#${i}</text>`;
+    }
+    if (fl.id === "origines") {
+      // la forêt = les graines du générateur (conditions initiales)
+      let d = "";
+      for (const [x, y] of L.marks.forest) d += `M${f1(x - 2.5)} ${f1(y)}h5M${f1(x)} ${f1(y - 2.5)}v5`;
+      g.thin = (g.thin || []).concat(d);
+    }
+    let s = "";
+    for (const r in g) s += `<path d="${g[r].join("")}" fill="none" ${WIRE[r] || `stroke="${PH}" stroke-opacity=".55" stroke-width=".8"`}/>`;
+    return s + box;
+  }
+
   function floorSvg(L, fl) {
     const W = L.W;
     const M = L.marks;
     const k = L.m ? 0.72 : 1;
     let s = (fl.id === "hero" ? "" : routeSeg(L, fl)) + islets(L, fl);
     for (const o of L.isles.filter((q) => q.floor === fl.id)) {
+      if (o.kind === "rock") {
+        s += skeleton(o, { nobox: true, every: 3 });
+        continue;
+      }
       s += skeleton(o);
       if (o.kind !== "spascia") s += blocks(o.city);
       if (o.kind === "aneo") {
@@ -123,9 +169,13 @@
         const ch = n.h / 28;
         s += `<defs><pattern id="h100" x="${f1(n.x)}" y="${f1(n.y)}" width="${cw}" height="${ch}" patternUnits="userSpaceOnUse"><rect x=".4" y=".4" width="${Math.max(0.6, cw - 1)}" height="${Math.max(0.6, ch - 1)}" fill="${PH}" fill-opacity=".6"/></pattern><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0v6" stroke="${PH}" stroke-opacity=".35"/></pattern></defs>`;
         s += `<rect x="${f1(n.x)}" y="${f1(n.y)}" width="${f1(n.w)}" height="${f1(n.h)}" fill="#020604" stroke="${PH}"/><rect x="${f1(n.x)}" y="${f1(n.y)}" width="${f1(n.w)}" height="${f1(n.h)}" fill="url(#h100)"/>`;
-        s += `<rect x="${f1(od.x)}" y="${f1(od.y)}" width="${f1(od.w)}" height="${f1(od.h)}" fill="url(#hatch)" stroke="${PH}" stroke-dasharray="4 3"/>`;
-        s += `<path d="M${f1(n.x + n.w / 2)} ${f1(n.y + n.h)}V${f1(od.y)}M${f1(n.x)} ${f1(n.y + n.h / 2)}H${f1(o.x - o.rx * 0.8)}M${f1(n.x + n.w)} ${f1(n.y + n.h / 2)}H${f1(o.x + o.rx * 0.8)}" stroke="${AMBER}" stroke-width="1.2"/>`;
+        s += `<path d="M${f1(n.x)} ${f1(n.y + n.h / 2)}H${f1(o.x - o.rx * 0.8)}M${f1(n.x + n.w)} ${f1(n.y + n.h / 2)}H${f1(o.x + o.rx * 0.8)}" stroke="${AMBER}" stroke-width="1.2"/>`;
+        void od;
         s += label(n.x + n.w + 4, n.y + n.h + 12, L.m ? "" : "cables = interconnect (illustrative)", "dim", "end");
+      } else if (o.kind === "inria") {
+        // l'île des savants : la génération précédente (halle hachurée)
+        const od = M.oldCity;
+        s += `<rect x="${f1(od.x)}" y="${f1(od.y)}" width="${f1(od.w)}" height="${f1(od.h)}" fill="url(#hatch)" stroke="${PH}" stroke-dasharray="4 3"/>`;
       } else if (o.kind === "atos") {
         const l = M.light;
         s += `<rect x="${f1(l.x - 14)}" y="${f1(l.y - 9)}" width="28" height="18" fill="#020604" stroke="${PH}"/>` + label(l.x, l.y + 3.5, "jetson");
@@ -147,6 +197,7 @@
         s += `<path d="M${f1(p.x0)} ${f1(p.y0)}L${f1(p.x1)} ${f1(p.y1)}" stroke="${AMBER}" stroke-width="1.6"/><path d="M${f1(p.x0)} ${f1(p.y0 + 7)}L${f1(p.x1)} ${f1(p.y1 + 7)}" stroke="${AMBER}" stroke-dasharray="3 3"/><circle cx="${f1(p.x1)}" cy="${f1(p.y1)}" r="4" fill="${AMBER}"/>`;
       }
     }
+    s += monuments(L, fl);
     return `<svg class="isle-layer" width="${W}" height="${fl.h}" viewBox="0 0 ${W} ${fl.h}" aria-hidden="true">${s}</svg>`;
   }
 
@@ -175,16 +226,38 @@
     G.parts.forEach(([x, y], i) => (s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="9" fill="#020604" stroke="${PH}"/><text x="${f1(x)}" y="${f1(y + 3.5)}" class="lbl">F${i}</text>`));
     return `<svg width="${f1(B.w)}" height="${f1(B.h)}" viewBox="0 0 ${f1(B.w)} ${f1(B.h)}" aria-hidden="true">${s}</svg>`;
   }
-  function cloudSvg(c) {
-    const R = c.s * 1.6;
-    let s = "";
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const [x, y, r] of c.puffs) {
-      s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}"/>`;
-      x0 = Math.min(x0, x - r); x1 = Math.max(x1, x + r); y0 = Math.min(y0, y - r); y1 = Math.max(y1, y + r);
+  // nuages de l'ouverture (v5) : la même géométrie que la Façade (bosses =
+  // cercles de construction, base, boîte), redessinée à chaque image
+  const TAU = Math.PI * 2;
+  function drawCloud(c, q, W, VH) {
+    const cl = q.c, k = q.k, x = q.x, y = q.y;
+    const ext = cl.s * 1.3 * k;
+    if (x + ext < 0 || x - ext > W || y - cl.s * 1.1 * k > VH || y < -4) return;
+    c.globalAlpha = q.op * (cl.z === 0 ? 0.6 : 1);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity;
+    c.strokeStyle = PH;
+    c.lineWidth = 1;
+    c.beginPath();
+    for (const [bx, by, r] of cl.bumps) {
+      const cx = x + bx * k, cy = y + by * k, rr = r * k;
+      c.moveTo(cx + rr, cy);
+      c.arc(cx, cy, rr, 0, TAU);
+      x0 = Math.min(x0, cx - rr); x1 = Math.max(x1, cx + rr); y0 = Math.min(y0, cy - rr);
     }
-    s += `<rect x="${f1(x0)}" y="${f1(y0)}" width="${f1(x1 - x0)}" height="${f1(y1 - y0)}" stroke-dasharray="3 3" stroke="${DIM}"/>`;
-    return `<svg width="${f1(R * 2)}" height="${f1(R * 2)}" viewBox="${f1(-R)} ${f1(-R)} ${f1(R * 2)} ${f1(R * 2)}"><g fill="none" stroke="${PH}" stroke-width="1" vector-effect="non-scaling-stroke">${s.replace(/<rect([^>]*)stroke-dasharray/g, '<rect vector-effect="non-scaling-stroke"$1stroke-dasharray')}</g></svg>`;
+    c.moveTo(x0, y);
+    c.lineTo(x1, y);
+    c.stroke();
+    c.setLineDash([3, 3]);
+    c.strokeStyle = DIM;
+    c.strokeRect(x0, y0, x1 - x0, y - y0);
+    c.setLineDash([]);
+    c.fillStyle = PH;
+    for (const [bx, by] of cl.bumps) c.fillRect(x + bx * k - 1.5, y + by * k - 1.5, 3, 3);
+    if (cl.z === 2 && k < 3) {
+      c.font = `9px ${MONO}`;
+      c.fillText(`instance z=${cl.D.toFixed(1)}`, x0, y0 - 4);
+    }
+    c.globalAlpha = 1;
   }
 
   function tagPos(L, key) {
@@ -200,12 +273,15 @@
     if (key === "light") return [M.light.x, M.light.y - (L.m ? 24 : 30)];
     if (key === "sky") return [isle.x, isle.y - isle.ry - 14];
     if (key === "quay") return [(M.pier.x0 + M.pier.x1) / 2, (M.pier.y0 + M.pier.y1) / 2 + 26];
+    if (L.labels[key]) return L.labels[key];
     if (isle) return [isle.x, isle.y + isle.ry + 16];
     return [0, 0];
   }
 
   let hud = {};
-  let cloudEls = [];
+  let cloudCv = null;
+  let cloudCtx = null;
+  let cloudOn = true;
   let fogEl = null;
   let cloudBox = null;
   RENDER.layout = function (SIM) {
@@ -254,10 +330,11 @@
     }
     cloudBox = document.getElementById("clouds");
     if (cloudBox) {
-      cloudBox.innerHTML = '<div class="fog"></div>' + L.clouds.map((c) => `<div class="cloud">${cloudSvg(c)}</div>`).join("");
+      cloudBox.innerHTML = '<div class="fog"></div><canvas class="cloud-cv"></canvas>';
       fogEl = cloudBox.firstChild;
-      cloudEls = Array.from(cloudBox.querySelectorAll(".cloud"));
-      lastCloudS = -1;
+      cloudCv = cloudBox.lastChild;
+      cloudCtx = cloudCv.getContext("2d");
+      cloudOn = true;
     }
     hud = {};
     document.querySelectorAll("[data-hud]").forEach((e) => (hud[e.dataset.hud] = e));
@@ -265,28 +342,36 @@
   };
 
   const cst = [];
-  let lastCloudS = -1;
   function updateClouds(SIM) {
     if (!cloudBox) return;
     const v = SIM.view;
     const L = SIM.layout;
     const s = Math.max(0, v.scrollY);
-    if (s === lastCloudS) return;
-    lastCloudS = s;
     const C = L.cam;
     if (s > C.end + 4) {
-      cloudBox.style.visibility = "hidden";
+      if (cloudOn) {
+        cloudBox.style.visibility = "hidden";
+        cloudOn = false;
+      }
       return;
     }
-    cloudBox.style.visibility = "visible";
-    GEO.cloudState(L, s, cst);
-    cst.forEach((q, i) => {
-      const el = cloudEls[i];
-      if (!el) return;
-      const R = q.c.s * 1.6;
-      el.style.transform = `translate(${(q.x - R).toFixed(2)}px,${(q.y - R).toFixed(2)}px) scale(${q.k.toFixed(4)})`;
-      el.style.opacity = q.op.toFixed(3);
-    });
+    if (!cloudOn) {
+      cloudBox.style.visibility = "visible";
+      cloudOn = true;
+    }
+    const d = v.dpr;
+    const cw = Math.round(v.W * d), ch = Math.round(v.vh * d);
+    if (cloudCv.width !== cw || cloudCv.height !== ch) {
+      cloudCv.width = cw;
+      cloudCv.height = ch;
+      cloudCv.style.width = `${v.W}px`;
+      cloudCv.style.height = `${v.vh}px`;
+    }
+    const c = cloudCtx;
+    c.setTransform(d, 0, 0, d, 0, 0);
+    c.clearRect(0, 0, v.W, v.vh);
+    GEO.cloudState(L, s, v.tsec, cst);
+    for (const q of cst) drawCloud(c, q, v.W, v.vh);
     const sm = (a, b, x) => {
       const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
@@ -371,22 +456,32 @@
     }
   }
 
-  // la houle, en données : la vraie valeur de h(x, t) dans une cellule sur trois
-  function drawValues(ctx, SIM) {
+  // v5 : sondes de profondeur, comme sur une carte marine : valeurs FIXES
+  // (fonction de la distance à la côte et d'un hachage de la cellule),
+  // clairsemées ; entier + décimale en indice, à la manière des cartes.
+  function drawSoundings(ctx, SIM) {
     const v = SIM.view;
     if (!v.cam.flat) return;
-    const cs = 24;
-    const st = SIM.layout.m ? 4 : 5;
-    ctx.font = `9px ${MONO}`;
-    ctx.fillStyle = "rgba(57,255,136,.42)";
-    const y0 = Math.ceil(v.scrollY / (cs * st)) * cs * st;
-    for (let y = y0; y < v.scrollY + v.vh; y += cs * st)
-      for (let x = cs * 1; x < v.W - cs; x += cs * st) {
-        const cx = x + cs / 2;
-        const cy = y + cs / 2;
-        if (SIM.dist(cx, cy) < 14) continue;
-        const h = SIM.swell(cx, cy, v.tsec);
-        ctx.fillText(`${h >= 0 ? "+" : "−"}${Math.abs(h).toFixed(2).slice(1)}`, x + 2, cy - v.scrollY + 3);
+    const cs = SIM.layout.m ? 70 : 92;
+    ctx.fillStyle = "rgba(57,255,136,.5)";
+    const j0 = Math.floor(v.scrollY / cs) - 1;
+    for (let j = j0; j * cs < v.scrollY + v.vh + cs; j++)
+      for (let i = 0; i * cs < v.W; i++) {
+        const hh = SIM.hash3(j, i, 5150);
+        if (hh % 5 < 2) continue;
+        const x = i * cs + 12 + (hh % 61) / 60 * (cs - 34);
+        const y = j * cs + 12 + ((hh >>> 8) % 61) / 60 * (cs - 30);
+        const d = SIM.dist(x, y);
+        if (d < 16) continue;
+        const z = 1.5 + Math.min(d, 420) * 0.085 + ((hh >>> 16) % 40) / 10;
+        const zi = Math.floor(z);
+        const sy = y - v.scrollY;
+        ctx.font = `10px ${MONO}`;
+        ctx.fillText(String(zi), x, sy);
+        if (zi < 21) {
+          ctx.font = `7px ${MONO}`;
+          ctx.fillText(String(Math.floor((z - zi) * 10)), x + (zi > 9 ? 12.5 : 6.5), sy + 3);
+        }
       }
   }
 
@@ -504,6 +599,33 @@
         ctx.fillRect(c.x + Math.cos(a) * c.r * 0.86 - 2, c.y + Math.sin(a) * c.r * 0.86 + top - 2, 4, 4);
       }
     }
+    if (floorVisible(L, v, "spascia")) {
+      // ballons-sondes (mêmes positions animées que la Façade) et anémomètres
+      const top = L.byId.spascia.top - v.scrollY;
+      ctx.strokeStyle = rgba(RANKS[2], 0.9);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const b of M.balloons) {
+        const bx = b.x + 3 * Math.sin(t * 0.37 + b.ph), by = b.y + top + 4 * Math.sin(t * 0.6 + b.ph);
+        ctx.moveTo(b.ax, b.ay + top);
+        ctx.lineTo(bx, by + b.r);
+        ctx.moveTo(bx + b.r, by);
+        ctx.arc(bx, by, b.r, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+      M.balloons.forEach((b, i) => i % 2 || tag(ctx, b.x + b.r + 4, b.y + top - b.r, `probe ${i}`, rgba(RANKS[2], 1)));
+      ctx.strokeStyle = PH;
+      ctx.beginPath();
+      for (const [i, a] of M.anemos.entries()) {
+        const ang = t * (3.2 + i * 0.7);
+        for (let j = 0; j < 3; j++) {
+          const q = ang + (j * Math.PI * 2) / 3;
+          ctx.moveTo(a.x, a.y + top);
+          ctx.lineTo(a.x + Math.cos(q) * a.r, a.y + top + Math.sin(q) * a.r * 0.45);
+        }
+      }
+      ctx.stroke();
+    }
     if (floorVisible(L, v, "atos")) {
       const top = L.byId.atos.top - v.scrollY;
       const l = M.light;
@@ -550,6 +672,50 @@
     if (s < 0.05) return;
     const x = pt[0];
     const y = pt[1];
+    if (v.scrollY < (L.cam.c0 + L.cam.c1) / 2) {
+      // écran d'accueil : le kitesurfeur en fil de fer (aile = la ressource
+      // qui tire, les deux lignes = les liens de communication)
+      const k = s * (L.m ? 1.25 : 1.1);
+      const sway = 0.22 * Math.sin(v.tsec * 0.55) + 0.08 * Math.sin(v.tsec * 1.7);
+      SIM.field(xb, yb, v.tf * SIM.DT, SIM.systems[0].g, fv);
+      const dir = fv[0] >= 0 ? 1 : -1;
+      const kx = x + dir * 46 * k + Math.sin(sway) * 30 * k;
+      const ky = y - 78 * k + Math.abs(Math.sin(sway)) * 8 * k;
+      const ka = sway * 0.9 + dir * 0.15;
+      const sp = 26 * k;
+      const bx = x + dir * 4 * k, by = y - 16.5 * k;
+      ctx.strokeStyle = PH;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const sg of [-1, 1]) {
+        ctx.moveTo(bx + sg * 3 * k, by);
+        ctx.lineTo(kx + Math.cos(ka) * sp * sg, ky + Math.sin(ka) * sp * sg + 7 * k);
+      }
+      ctx.moveTo(x - 11 * k, y + k);
+      ctx.lineTo(x + 11 * k, y + k);
+      ctx.moveTo(x - 5 * k, y);
+      ctx.lineTo(x - 2.5 * k, y - 9 * k);
+      ctx.lineTo(x + 4 * k, y);
+      ctx.moveTo(x - 2.5 * k, y - 9 * k);
+      ctx.lineTo(x - dir * 6.5 * k, y - 17 * k);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(kx, ky);
+      ctx.rotate(ka);
+      ctx.beginPath();
+      ctx.moveTo(-sp, 7 * k);
+      ctx.quadraticCurveTo(-sp * 0.9, -10 * k, 0, -12 * k);
+      ctx.quadraticCurveTo(sp * 0.9, -10 * k, sp, 7 * k);
+      ctx.quadraticCurveTo(sp * 0.55, -3 * k, 0, -5 * k);
+      ctx.quadraticCurveTo(-sp * 0.55, -3 * k, -sp, 7 * k);
+      ctx.stroke();
+      ctx.fillStyle = PH;
+      for (const [px, py] of [[-sp, 7 * k], [0, -12 * k], [sp, 7 * k], [0, -5 * k]]) ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+      ctx.restore();
+      if (s > 0.3) tag(ctx, kx + sp + 6, ky, "kite · 2 lines · job 0x2a", AMBER);
+      return;
+    }
     ctx.strokeStyle = AMBER;
     ctx.fillStyle = "rgba(255,176,31,.15)";
     ctx.lineWidth = 1.4;
@@ -572,7 +738,7 @@
     const v = SIM.view;
     ctx.clearRect(0, 0, v.W, v.vh);
     const count = [0, 0, 0, 0, 0];
-    drawValues(ctx, SIM);
+    drawSoundings(ctx, SIM);
     drawVectors(ctx, SIM);
     drawTracers(ctx, SIM, count);
     drawLocal(ctx, SIM);

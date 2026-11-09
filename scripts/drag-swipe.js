@@ -39,6 +39,20 @@
   const NEIGHBOR_DIRECTION = -1;
   const DRAG_THRESHOLD_RATIO = 0.22; // fraction de la largeur d'écran
   const SETTLE_MS = 260;
+  // --- Geste rapide (v5) -------------------------------------------------
+  // Un seuil en distance seul annulait les gestes rapides mais courts, et
+  // une fin d'animation à durée/courbe fixes faisait freiner (ou bondir)
+  // la page au lâcher. On mesure donc la vitesse du doigt au lâcher :
+  //  - un coup sec vers le voisin (vitesse > FLICK_MIN_SPEED, distance >
+  //    FLICK_MIN_RATIO de la largeur) suffit à basculer ; un coup sec dans
+  //    l'autre sens annule, même au-delà du seuil de distance ;
+  //  - la fin d'animation PART À LA VITESSE DU DOIGT (cf. settleCurve) et
+  //    arrive à vitesse nulle : aucune rupture de vitesse.
+  const FLICK_WINDOW_MS = 80; // vitesse mesurée sur les ~80 dernières ms du geste
+  const FLICK_MIN_SPEED = 0.4; // px/ms (400 px/s)
+  const FLICK_MIN_RATIO = 0.06; // fraction de la largeur d'écran
+  const SETTLE_MIN_MS = 160;
+  const SETTLE_MAX_MS = 440;
   // Le clic sur le bouton n'a pas le retour tactile immédiat d'un
   // vrai geste de drag : une bascule instantanée y paraît plus abrupte,
   // donc on lui laisse une animation un peu plus longue.
@@ -83,9 +97,9 @@
 
   // Place les calques du miroir. offset = décalage de la fenêtre (0 =
   // couverture totale, NEIGHBOR_DIRECTION * largeur = repos hors champ).
-  function placeMirror(offset, ms) {
+  function placeMirror(offset, ms, ease) {
     if (!mirrorFrame) return;
-    const tr = ms ? `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)` : "none";
+    const tr = ms ? `transform ${ms}ms ${ease || "cubic-bezier(0.22, 1, 0.36, 1)"}` : "none";
     if (REVEAL === "scan" && mirrorWindow) {
       mirrorWindow.style.transition = tr;
       mirrorWindow.style.transform = `translateX(${offset}px)`;
@@ -293,7 +307,10 @@
     const w = window.innerWidth;
     const clampedDx = Math.max(-w, Math.min(w, dx));
     // contenu courant : suit le doigt, jusqu'à sortir complètement.
-    document.documentElement.style.setProperty("--drag-x", `${clampedDx}px`);
+    // En mode "scan" la page ne bouge pas et personne ne lit --drag-x :
+    // l'écrire sur :root à chaque touchmove forçait un recalcul de style
+    // de TOUT le document (milliers de nœuds SVG) pendant le geste (v5).
+    if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", `${clampedDx}px`);
     // iframe miroir : commence hors-champ (NEIGHBOR_DIRECTION * w) et
     // glisse vers 0 au même rythme que le doigt, sans jamais dépasser 0.
     if (mirrorFrame) {
@@ -320,22 +337,81 @@
     }
   }
 
-  function settleCommitted(durationMs) {
-    const ms = durationMs || SETTLE_MS;
+  // Fin d'animation qui prolonge le geste (v5). remaining = distance
+  // restante (px), speed = vitesse du doigt VERS la cible au lâcher (px/ms).
+  // Profil = décélération constante : y(u) = s·u − (s−1)·u² … exactement une
+  // cubic-bezier(1/3, s/3, 2/3, 1) (élévation de degré d'une quadratique),
+  // de pente initiale s (normalisée) et de pente finale nulle. On choisit
+  // la durée pour que s = 2 (T = 2·D/v : la page part à la vitesse du doigt
+  // et s'arrête pile sur la cible), bornée à [SETTLE_MIN_MS, SETTLE_MAX_MS] ;
+  // si la borne s'applique, s = v·T/D garde la vitesse initiale exacte.
+  // s ≤ 3 : y1 ≤ 1, la courbe ne dépasse jamais la cible ; au-delà (coup
+  // très sec, peu de distance restante) on prend x1 = 1/s, y1 = 1, même
+  // pente initiale et toujours sans dépassement.
+  function settleCurve(remaining, speed) {
+    const D = Math.max(1, remaining);
+    const v = Math.max(0, speed);
+    const ms = Math.round(Math.max(SETTLE_MIN_MS, Math.min(SETTLE_MAX_MS, v > 0 ? (2 * D) / v : SETTLE_MAX_MS)));
+    const s = (v * ms) / D;
+    const r = (n) => Math.round(n * 1000) / 1000;
+    const ease = s <= 3 ? `cubic-bezier(0.333, ${r(s / 3)}, 0.667, 1)` : `cubic-bezier(${r(1 / s)}, 1, 0.667, 1)`;
+    return { ms, ease };
+  }
+
+  // speed (facultatif) : vitesse du doigt vers le voisin au lâcher (px/ms).
+  // Sans vitesse (lien de secours, durée imposée) : courbe d'origine.
+  function settleCommitted(durationMs, speed) {
     const w = window.innerWidth;
+    let ms = durationMs || SETTLE_MS;
+    let ease = null;
+    if (speed != null) {
+      const c = settleCurve(w - Math.max(0, progressTowardNeighbor(currentDx)), speed);
+      ms = c.ms;
+      ease = c.ease;
+    }
     document.body.classList.add("settling");
-    document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
-    placeMirror(0, ms);
+    if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
+    placeMirror(0, ms, ease);
     window.setTimeout(goToMirrorReal, ms);
   }
 
-  function settleCancelled() {
+  // speed (facultatif) : vitesse du doigt vers le voisin au lâcher (px/ms) ;
+  // le retour part à cette vitesse si le doigt revenait déjà en arrière.
+  function settleCancelled(speed) {
+    let ms = SETTLE_MS;
+    let ease = null;
+    const back = Math.max(0, progressTowardNeighbor(currentDx));
+    if (speed != null && back > 0) {
+      const c = settleCurve(back, -speed);
+      ms = c.ms;
+      ease = c.ease;
+    }
     document.body.classList.add("settling");
-    document.documentElement.style.setProperty("--drag-x", "0px");
-    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, SETTLE_MS);
+    if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", "0px");
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, ms, ease);
     window.setTimeout(() => {
       document.body.classList.remove("settling");
-    }, SETTLE_MS);
+    }, ms);
+  }
+
+  // Échantillons [t, dx] du geste, pour la vitesse de lâcher (v5).
+  const samples = [];
+  function trackSample(t, dx) {
+    samples.push([t, dx]);
+    // on garde un peu plus que la fenêtre de mesure
+    while (samples.length > 2 && t - samples[0][0] > FLICK_WINDOW_MS * 2) samples.shift();
+  }
+  // Vitesse (px/ms, signe de dx) sur les FLICK_WINDOW_MS dernières ms.
+  // Doigt immobile avant de lever (dernier échantillon trop ancien) : 0.
+  function releaseVelocity(now) {
+    const n = samples.length;
+    if (n < 2) return 0;
+    const [t1, x1] = samples[n - 1];
+    if (now - t1 > FLICK_WINDOW_MS) return 0;
+    let i = n - 2;
+    while (i > 0 && t1 - samples[i - 1][0] <= FLICK_WINDOW_MS) i--;
+    const [t0, x0] = samples[i];
+    return t1 - t0 >= 8 ? (x1 - x0) / (t1 - t0) : 0;
   }
 
   // Sur les vrais éléments de texte, on laisse le navigateur gérer la
@@ -406,6 +482,7 @@
     startX = clientX;
     startY = clientY;
     currentDx = 0;
+    samples.length = 0;
     document.body.classList.remove("settling");
   }
 
@@ -439,6 +516,7 @@
     }
 
     currentDx = dx;
+    trackSample(evt && evt.timeStamp ? evt.timeStamp : performance.now(), dx);
     if (Math.abs(currentDx) > DRAG_MOTION_PX) hadDragMotion = true;
     if (evt) evt.preventDefault();
     if (progressTowardNeighbor(currentDx) > 0) {
@@ -452,12 +530,17 @@
     if (!dragging) return;
     dragging = false;
     document.body.classList.remove("dragging");
-    const threshold = window.innerWidth * DRAG_THRESHOLD_RATIO;
-    if (intentResolved && progressTowardNeighbor(currentDx) > threshold) {
+    const w = window.innerWidth;
+    const progress = progressTowardNeighbor(currentDx);
+    // vitesse vers le voisin au lâcher (> 0 : le doigt allait vers lui)
+    const speed = progressTowardNeighbor(releaseVelocity(performance.now()));
+    const flick = speed > FLICK_MIN_SPEED && progress > w * FLICK_MIN_RATIO;
+    const flickBack = speed < -FLICK_MIN_SPEED;
+    if (intentResolved && (flick || (progress > w * DRAG_THRESHOLD_RATIO && !flickBack))) {
       committed = true;
-      settleCommitted();
+      settleCommitted(0, speed);
     } else {
-      settleCancelled();
+      settleCancelled(intentResolved ? speed : null);
     }
     currentDx = 0;
   }

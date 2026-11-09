@@ -106,7 +106,7 @@ const F = {
         job(fr ? "2026-02 → auj." : "2026-02 → now", "AI/HPC Senior Consultant", fr ? "Aneo · CDI · Paris et périphérie, hybride" : "Aneo · full-time · Paris area, hybrid", fr ? "Infra cloud/on-prem hybride pour la recherche quantitative : orchestrateur répartissant les jobs entre AWS et Slurm. Le tourbillon = le scheduler." : "Hybrid cloud/on-prem infra for quant research: orchestrator scheduling compute across AWS and Slurm. The whirlpool = the scheduler.") +
           job(fr ? "2026-02 → auj." : "2026-02 → now", "Portfolio Platform Engineer", fr ? "Capital Fund Management (CFM) · intérimaire · Paris" : "Capital Fund Management (CFM) · contractor · Paris", "")
       ) +
-      tag("aneo", "on-prem · slurm") + tag("sky", "aws · ec2 / s3 / lambda") + tag("whirl", "scheduler", "it") + tag("cfm", "cfm", "small")
+      tag("aneo", "on-prem · slurm") + tag("sky", "aws · ec2 / s3 / lambda") + tag("whirl", "scheduler", "it") + tag("cfm", "cfm", "small") + tag("bourse", "orchestrator", "it") + tag("harbor", "job ingress · illustrative", "it")
     );
   },
   dalia(l) {
@@ -118,7 +118,7 @@ const F = {
         "SHEET 04/09 · NVL72",
         "L5",
         "dalia: NVL72",
-        job("2025-08 → 2026-01", "Sr. AI/HPC Engineer", fr ? "MINERVA European Support Centre for Scalable AI Research and Deployment · CDD · Saclay" : "MINERVA European Support Centre for Scalable AI Research and Deployment · fixed-term · Saclay", fr ? "Déploiement et exploitation du supercalculateur Dalia — 360 PFlop/s (FP16), 72x NVIDIA GB200. Cratère = domaine NVLink, crêtes = NVSwitch, lave = trafic NVLink." : "Deployed and operated the Dalia supercomputer — 360 PFlop/s (FP16), 72x NVIDIA GB200. Crater = NVLink domain, ridges = NVSwitch, lava = NVLink traffic.") +
+        job("2025-08 → 2026-01", "Sr. AI/HPC Engineer", fr ? "MINERVA European Support Centre for Scalable AI Research and Deployment · CDD · Saclay" : "MINERVA European Support Centre for Scalable AI Research and Deployment · fixed-term · Saclay", fr ? "Déploiement et exploitation du supercalculateur Dalia — 360 PFlop/s (FP16), 72x NVIDIA GB200. Anneau des 72 forges = domaine NVLink, canaux de lave = trafic NVLink." : "Deployed and operated the Dalia supercomputer — 360 PFlop/s (FP16), 72x NVIDIA GB200. Ring of 72 forges = NVLink domain, lava channels = NVLink traffic.") +
           job("2025-12", fr ? "Chargé de cours — Master Data Science &amp; AI for Business, X-HEC" : "Lecturer — MSc Data Science &amp; AI for Business, X-HEC", fr ? "École Polytechnique · indépendant · Palaiseau" : "École Polytechnique · independent · Palaiseau", "")
       ) +
       tag("volcano", "72× GB200 · nvlink") + tag("xhec", "x-hec", "small")
@@ -137,7 +137,7 @@ const F = {
           job("2022-03 → 2024-02", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "Inria · CDD · Saclay" : "Inria · fixed-term · Saclay", fr ? "Jean Zay, génération précédente — 37 PFlop/s." : "Jean Zay, previous generation — 37 PFlop/s.") +
           job("2022-03 → 2025-09", fr ? "Formateur — Deep Learning &amp; HPC" : "Lecturer — Deep Learning &amp; HPC", fr ? "FIDLE · à distance" : "FIDLE · remote", "")
       ) +
-      tag("jeanzay", "1456× H100 · 125 PFlop/s") + tag("newCity", "cnrs · 52×28 = 1456 gpu", "it") + tag("oldCity", fr ? "inria · gén. préc. · 37 PFlop/s" : "inria · prev gen · 37 PFlop/s", "it") +
+      tag("jeanzay", "1456× H100 · 125 PFlop/s") + tag("newCity", "cnrs · 52×28 = 1456 gpu", "it") + tag("oldCity", fr ? "inria · gén. préc. · 37 PFlop/s" : "inria · prev gen · 37 PFlop/s", "it") + tag("citadel", "slurm ctl · illustrative", "it") +
       tag("fidle", "fidle", "small") + tag("dlojz", "dlo-jz", "small") + tag("panoramia", "panoram'ia", "small")
     );
   },
@@ -164,7 +164,7 @@ const F = {
         "L1",
         "bare metal: 110 × arm",
         job("2020-04 → 2020-08", fr ? "Ingénieur infrastructure (stage)" : "Infrastructure Engineer (intern)", "SPASCIA, Ramonville-Saint-Agne", fr ? "Cluster ARM-SBC 110 nœuds (440 cœurs CPU) pour RL asynchrone — OS sur mesure, automatisation, monitoring, services web. 1 cabane = 1 nœud : les 110 sont dessinés." : "110-node ARM-SBC cluster (440 CPU cores) for async RL training — custom OS, automation, monitoring, web services. 1 hut = 1 node: all 110 are drawn.")
-      ) + tag("spascia", "110 nodes · 440 cores")
+      ) + tag("spascia", "110 nodes · 440 cores") + tag("chemlab", "monitoring · web services", "it")
     );
   },
   origines(l) {
@@ -175,7 +175,7 @@ const F = {
     return (
       layerMark("L0 · boot") +
       panel("origines", "SHEET 08/09 · BOOT", "L0", "init()", `<p>${fr ? "Conditions initiales : BIOS, puis le reste du système." : "Initial conditions: BIOS, then the rest of the system."}</p>` + edu.map(([a, b, c]) => job(a, b, c, "")).join("")) +
-      tag("port", "insa · blois") + tag("yard", "bios · init()", "it") + tag("ets", "éts · montréal", "small")
+      tag("port", "insa · blois") + tag("yard", "bios · init()", "it") + tag("ets", "éts · montréal", "small") + tag("forest", "rng seeds · initial conditions", "it")
     );
   },
   contact(l) {
