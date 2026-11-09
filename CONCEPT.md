@@ -384,3 +384,94 @@ de l'ouverture y sont des cercles de construction et leurs boîtes.
 pixels différents, dans les deux sens, Pixel 7 et 1440×900, au hero
 (0), en pleine traversée des nuages (330), sur des étages animés et au
 quai ; scroll et langue conservés. Builds : Façade 221 Ko, Machine 195 Ko.
+
+## Réalisation v5 (itération ciblée, cf. ITERATION-v5.md)
+
+**1. Bascule rapide (`drag-swipe.js`, identique des deux côtés à
+`MIRROR_URL`/`NEIGHBOR_DIRECTION` près).** Changements localisés et
+commentés, sans toucher au payload, au prefetch, à `--vh` ni au `pagehide` :
+- *Vitesse de lâcher* : chaque `touchmove`/`pointermove` est échantillonné
+  (`event.timeStamp`) ; au lâcher, vitesse sur les 80 dernières ms (0 si le
+  doigt s'était arrêté). Un coup sec vers le voisin (> 0,4 px/ms et > 6 % de
+  la largeur) bascule ; un coup sec en sens inverse annule même au-delà du
+  seuil de 22 %.
+- *Fin d'animation qui prolonge le geste* (`settleCurve`) : profil à
+  décélération constante, `cubic-bezier(1/3, s/3, 2/3, 1)` (pente initiale
+  s, finale nulle, jamais de dépassement), durée T = 2·D/v bornée à
+  160–440 ms, s = v·T/D. La page part à la vitesse du doigt et s'arrête pile
+  sur la cible. Le lien de secours garde l'ancienne courbe.
+- *Plus de `--drag-x` sur `:root` en mode scan* : personne ne le lit, mais
+  l'écrire à chaque mouvement forçait un recalcul de style de tout le
+  document : 16–17 ms par `touchmove` sur la page v4 (≈ 4 000 nœuds),
+  contre 0,03 ms pour les seuls transforms, soit une image perdue par
+  mouvement : très probablement la cause principale des à-coups. En mode
+  « slide » (production), la variable reste écrite (à surveiller là-bas).
+- *Réveil de l'iframe* : vérifié pour un geste de 5 images ; premier rendu
+  de l'iframe 61 ms après le `touchstart`, dès qu'elle entre à l'écran
+  (Chrome gèle le rAF d'une iframe cross-site hors champ ; le `wake` la
+  redessine à l'instant du contact), puis 60 i/s.
+
+**2. Îles à thème.** La géographie partagée (`geo.js`) décrit des
+*monuments* (`L.mons` : boîte + type) et leur dessin (`GEO.glyph`) : chemins
+SVG typés par rôle (pierre, mur, toit, verre, lave, lueur…). La Façade les
+remplit et les encre (bâtiments en élévation, vue cavalière des cartes
+anciennes ; forts et places en plan) ; la Machine trace exactement les mêmes
+chemins en fil de fer, avec boîte et nom d'objet (`bourse#0`). Tous les
+chemins d'un même rôle forment un seul `<path>` : la Façade passe de
+≈ 4 000 à ≈ 600 nœuds DOM.
+- *Aneo/CFM, la cité marchande* : Palais de la Bourse et tableau des cours,
+  comptoirs à auvents, entrepôts à sheds, port à trois quais, cargos et
+  grues ; la corbeille sur l'îlot CFM ; l'île céleste AWS reste.
+- *Dalia, la Forge* : forteresse en étoile à six bastions, fossé, glacis,
+  enceinte à tours ; l'anneau des 72 forges (une par GB200) autour du grand
+  fourneau, qui rougeoient chacune à son rythme ; coulées de lave
+  canalisées ; arsenal, casernes ; X-HEC en académie à coupole.
+- *Jean Zay, la Capitale* : grand palais (la halle, 52 × 28 travées côté
+  Machine), citadelle, panthéons, arc, huit avenues rayonnantes vers les
+  portes des remparts, quartiers denses ; FIDLE, DLO-JZ, Panoram'IA en
+  amphithéâtres. *Inria, l'île des savants* : île distincte, plus bas dans
+  l'étage (plus loin dans le temps) : laboratoires (l'ancienne halle),
+  observatoire, serre, jardin botanique.
+- *Atos, l'île-usine* : phare en tour rayée (le faisceau part de sa
+  lanterne), cheminées fumantes, ateliers à sheds, tapis roulant.
+- *SPASCIA, l'île des airs, la nuit* : mer bleu nuit (canal « nuit » ajouté
+  à la palette et lu par le shader : lavis plus dense, encre éclaircie comme
+  au clair de lune), terre bleutée, 110 cabanes aux fenêtres éclairées,
+  laboratoire aux fioles lumineuses, abris météo, mâts à feux, anémomètres
+  qui tournent, ballons-sondes lumineux qui se balancent, lanternes.
+- *Origines, le chantier dans la forêt* : 170 conifères (80 sur mobile),
+  coque en membrures sur sa cale, scierie à roue sur un ruisseau, grumes,
+  village ; côté Machine, la forêt devient les graines du générateur.
+- Récifs entre les îles (moins de mer vide), toponymie bilingue en plus,
+  titres des cartes accordés aux thèmes (aucun fait nouveau).
+
+**3. Accueil.** Kitesurfeur à l'encre (planche, rider, deux lignes, aile en
+croissant qui ondule), seulement sur l'écran d'accueil : il devient le
+voilier sous le voile de nuages ; côté Machine, le même kite en fil de fer.
+Nuages refaits : géométrie dans `geo.js`, trois couches de profondeur en
+perspective vraie (k = D/(D − T) : les proches passent d'abord), redessinés
+en vecteurs à chaque image sur leur propre canvas (contour festonné à
+l'encre, base plate, ombre, gravure), dérive lente à l'horloge murale.
+Machine : plus de couloirs de rangs colorés vers l'horizon.
+
+**4. Machine épurée.** Plus d'isolignes de houle ; les valeurs h(x,t)
+deviennent des sondes fixes de carte marine (profondeur selon la distance à
+la côte et un hachage de cellule, entier + décimale en indice),
+clairsemées. Restent le squelette, les rangs et halos, les cellules
+masquées, le champ de vent.
+
+**Tests (`scratchpad/pw/archipel-v5/`).** `flick.mjs` (gestes synthétisés
+dans la page, une position par image ; transform de `#mirror-window` relevé
+image par image ; vitesse initiale calculée sur la courbe réelle). v4 : un
+geste de 100 ms sur 15 % est annulé ; à 1,37 px/ms, la transition démarre à
+4,4 px/ms (×3,2) puis freine. v5 : tous les gestes rapides (80–150 ms,
+12–40 %) basculent, vitesse de départ / vitesse du doigt 0,97–1,3 (erreur
+d'estimation comprise), aucun recul, dans les deux sens, tactile et souris ;
+coup sec en arrière : annulé. `compare.mjs` + `diffpng.mjs` : aperçu contre
+arrivée ≤ 0,09 % de pixels dans les deux sens, Pixel 7 et 1440×900 (hero,
+traversée des nuages, Dalia, SPASCIA, quai) ; scroll et langue conservés.
+Builds : Façade 276 Ko, Machine 245 Ko.
+
+**Limites.** GPU logiciel : fluidité mesurée par la position des calques,
+pas sur téléphone. Monuments petits sur mobile ; kite petit au loin. Fin de
+geste en décélération constante (pas un ressort).
