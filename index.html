@@ -1,10 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Couleur du canevas par défaut AVANT tout CSS : le premier frame peint
        après la navigation cross-site n'est jamais blanc par défaut. -->
+  <!-- .no-js → .js avant tout rendu : les étages pré-générés au build
+       (lisibles sans JS) sont masqués, lang-switch.js les remplace. -->
+  <script>document.documentElement.className = "js";</script>
   <meta name="color-scheme" content="dark" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -88,7 +91,7 @@
     <span class="brand">hunoutl</span>
     <div class="bar-group">
       <button id="cv-soon" class="bar-btn cv-soon" type="button">CV</button>
-      <a id="mirror-hint" class="mirror-hint" data-mirror-link href="#"></a>
+      <a id="mirror-hint" class="mirror-hint" data-mirror-link href="https://hunoutl.gitlab.io/">← The map</a>
     </div>
     <p id="bar-toast" class="bar-toast" role="status" aria-live="polite"></p>
   </header>

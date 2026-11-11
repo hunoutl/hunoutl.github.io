@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(root, p), "utf8");
@@ -42,6 +43,45 @@ function transformScript(path, code) {
 }
 
 let html = read("index.html");
+
+// --- Étages pré-générés (contenu lisible sans JavaScript : robots,
+// aperçus de liens, NoScript, script en échec). geo.js et content.js sont
+// exécutés tels quels dans un bac à sable ; seule la langue par défaut de
+// la page (<html lang>) est produite. Avec JS, une ligne du <head> passe
+// <html> de .no-js à .js : ces sections sont alors masquées dès le premier
+// rendu, puis remplacées par lang-switch.js (rendu inchangé, au pixel près).
+const NBSP = "\u00a0", NNBSP = "\u202f";
+function typesetText(t, lang) {
+  t = t.replace(/(\p{L})'(\p{L})/gu, "$1’$2");
+  if (lang !== "fr") return t;
+  return t
+    .replace(/(\S) ([:%])(?=\s|$)/g, `$1${NBSP}$2`)
+    .replace(/(\S) ([;?!])/g, `$1${NNBSP}$2`)
+    .replace(/« /g, `«${NNBSP}`)
+    .replace(/ »/g, `${NNBSP}»`);
+}
+function prerenderFloors(lang) {
+  const sandbox = { console };
+  sandbox.window = sandbox;
+  sandbox.innerWidth = 1280;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(read("scripts/geo.js"), ctx, { filename: "geo.js" });
+  vm.runInContext(read("scripts/content.js"), ctx, { filename: "content.js" });
+  const floors = vm.runInContext(`FLOORS.map((f) => [f.id, f[${JSON.stringify(lang)}]()])`, ctx);
+  return floors
+    .map(([id, inner]) => {
+      // texte entre les balises seulement (les attributs ne sont pas touchés)
+      inner = inner.replace(/>([^<]+)</g, (_, t) => `>${typesetText(t, lang)}<`);
+      return `<section class="floor floor-static" id="${id}" data-floor-id="${id}"><div class="floor-inner">${inner.trim()}</div></section>`;
+    })
+    .join("\n");
+}
+const pageLang = (html.match(/<html lang="(\w+)"/) || [])[1];
+if (!pageLang) throw new Error('<html lang="…"> introuvable');
+if (!html.includes('<main id="floors"></main>')) throw new Error('<main id="floors"></main> introuvable');
+html = html.replace('<main id="floors"></main>', () => `<main id="floors">\n${prerenderFloors(pageLang)}\n</main>`);
+// Lien vers l'autre face : utilisable sans JS (drag-swipe.js le remplace ensuite)
+if (mirrorUrl) html = html.replace(/(data-mirror-link href=")[^"]*"/, (_, a) => `${a}${mirrorUrl}"`);
 // Commentaires HTML et préchargements cross-site (inutiles : tout est inline).
 html = html.replace(/<!--[\s\S]*?-->\s*/g, "");
 html = html.replace(/\s*<link rel="(?:prefetch|preconnect)"[^>]*>/g, "");
