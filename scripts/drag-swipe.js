@@ -1,42 +1,38 @@
 // Glissement horizontal → bascule vers le site miroir, sur l'étage
-// équivalent. Même fichier sur les deux sites, seuls MIRROR_URL
-// et NEIGHBOR_DIRECTION changent.
+// équivalent. Même fichier sur les deux sites : ce qui diffère
+// (URL de l'autre face, sens du glissement) vient de site.js.
 //
 // Principe anti-flash : un iframe caché du site miroir est préchargé
-// et gardé synchronisé (scroll) en continu. Pendant le drag, on fait
+// (à la première intention du visiteur, cf. armMirror) et gardé
+// synchronisé (scroll) en continu. Pendant le drag, on fait
 // glisser CE VRAI RENDU du miroir à l'écran (pas une simple couleur/
 // overlay) — zéro flash puisque rien ne recharge pendant le geste.
 // La navigation réelle (changement de domaine dans la barre d'adresse)
 // n'est déclenchée qu'une fois l'iframe déjà en pleine couverture de
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
-  // URL de base du site miroir (avec slash final). tools/build.mjs peut
-  // réécrire cette ligne (MIRROR_URL=...) pour les tests en réseau local.
-  const MIRROR_URL = "https://hunoutl.gitlab.io/";
+  // URL de base du site miroir (avec slash final), cf. site.js.
+  const MIRROR_URL = window.SITE.mirrorUrl;
   const MIRROR_ORIGIN = new URL(MIRROR_URL).origin;
-  // Payload d'arrivée transmis dans le fragment d'URL : "#~sw.<scrollY>.<lang>.<flags>".
-  // Pas window.name : Firefox (88+) et Safari le vident sur toute
-  // navigation cross-site — github.io et gitlab.io sont deux sites
-  // distincts (Public Suffix List). Le fragment ne correspond à aucun id
-  // d'élément, donc pas de scroll d'ancre natif ; il est retiré de l'URL
-  // (replaceState) dès la lecture.
-  //
-  // Exception Chromium : le prefetch (Speculation Rules) n'est réutilisé
-  // que si l'URL de navigation est EXACTEMENT l'URL prefetchée, fragment
-  // compris (mesuré : avec "#~sw..." → PrefetchSuccessfulButNotUsed).
-  // Là où les Speculation Rules existent, on garde donc l'URL nue et le
-  // payload passe par window.name, que Chrome conserve en cross-site.
-  // Firefox/Safari (qui vident window.name) n'ont pas de prefetch :
-  // fragment pour eux.
+  // Payload d'arrivée "<scrollY>.<lang>.<flags>.<innerHeight>.<tick figé>"
+  // (dernier champ vide si la simulation tourne), transmis de deux façons :
+  // - Chromium (Speculation Rules) : par window.name, que Chrome conserve en
+  //   cross-site. L'URL de navigation doit rester EXACTEMENT l'URL
+  //   prefetchée, fragment compris (mesuré : avec "#~sw…" →
+  //   PrefetchSuccessfulButNotUsed) ;
+  // - Firefox et Safari (pas de prefetch, et ils vident window.name en
+  //   cross-site — github.io et gitlab.io sont deux sites distincts selon
+  //   la Public Suffix List) : par le fragment d'URL, qui ne correspond à
+  //   aucun id d'élément (pas de scroll d'ancre natif) et est retiré de
+  //   l'URL (replaceState) dès la lecture.
   const PAYLOAD_PREFIX = "#~sw.";
   const NAME_PREFIX = "~sw.";
   const SPEC_RULES = !!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"));
   const FLAG_USER_ACTIVATION = 1;
   const FLAG_DEBUG = 2;
-  // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
-  // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
-  // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).
-  const NEIGHBOR_DIRECTION = -1;
+  // Convention "carrousel" : +1 = voisin à droite, révélé en glissant vers
+  // la gauche ; -1 = voisin à gauche, révélé en glissant vers la droite.
+  const NEIGHBOR_DIRECTION = window.SITE.neighborDirection;
   const DRAG_THRESHOLD_RATIO = 0.22; // fraction de la largeur d'écran
   const SETTLE_MS = 260;
   // --- Geste rapide (v5) -------------------------------------------------
@@ -131,20 +127,10 @@
     return best ? best.id : "hero";
   }
 
-  // On synchronise en pixels ABSOLUS (scrollY), pas en fraction : les deux
-  // sites ont maintenant des hauteurs de page quasi identiques (étages à
-  // hauteur fixe partagée), donc un même scrollY tombe déjà au même
-  // endroit visuel des deux côtés. La fraction (scrollY / (scrollHeight -
-  // hauteur de viewport)) dépendait de la hauteur de viewport mesurée à
-  // l'instant T — sur mobile, cette valeur peut légèrement varier entre le
-  // moment de l'aperçu (pendant le drag) et celui de l'atterrissage réel
-  // (après navigation), ce qui décalait la position de façon intermittente.
-  // Rester en pixels bruts supprime cette dépendance.
-  function scrollFraction() {
-    const max = document.documentElement.scrollHeight - viewportHeight();
-    if (max <= 0) return 0;
-    return Math.min(1, Math.max(0, window.scrollY / max));
-  }
+  // Synchronisation en pixels ABSOLUS (scrollY), pas en fraction de page :
+  // les étages ont la même hauteur des deux côtés (geo.js), donc un même
+  // scrollY tombe au même endroit ; la fraction dépendait de la hauteur de
+  // viewport, qui varie sur mobile entre l'aperçu et l'arrivée.
 
   // Hauteur réelle de "100vh" sur CETTE page (sur mobile : viewport sans
   // la barre d'adresse). Dans l'iframe, 100vh vaudrait la hauteur de
@@ -166,7 +152,7 @@
     if (!mirrorFrame || !mirrorFrameReady) return;
     const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
     mirrorFrame.contentWindow.postMessage(
-      { type: "sync-scroll", scrollY: window.scrollY, lang, vh: measureVh() },
+      { type: "sync-scroll", scrollY: window.scrollY, lang, vh: measureVh(), pausedT: pausedTickNow() },
       MIRROR_ORIGIN
     );
   }
@@ -176,17 +162,28 @@
   // départ prime toujours sur la préférence locale.
   function syncIncomingLang(lang) {
     if (
-      lang &&
+      (lang === "fr" || lang === "en") &&
       typeof currentLang !== "undefined" &&
       lang !== currentLang &&
       typeof renderFloors === "function"
     ) {
       currentLang = lang;
-      localStorage.setItem("siteLang", currentLang);
+      if (typeof storeLang === "function") storeLang(currentLang);
       renderFloors(currentLang);
       if (typeof updateLangButton === "function") updateLangButton();
       if (typeof updateMirrorHint === "function") updateMirrorHint();
     }
+  }
+
+  // Tick figé de la simulation (bouton pause), ou null si elle tourne.
+  function pausedTickNow() {
+    return window.SIM && typeof SIM.pausedTick === "function" ? SIM.pausedTick() : null;
+  }
+  // L'autre face impose son état : figée sur le même tick, ou en marche.
+  function syncIncomingPause(t) {
+    if (!window.SIM || typeof SIM.pause !== "function") return;
+    if (typeof t === "number" && isFinite(t)) SIM.pause(t);
+    else SIM.resume();
   }
 
   function langNow() {
@@ -236,7 +233,7 @@
     }
     if (nav) {
       debugLog(
-        `deliveryType="${nav.deliveryType ?? "n/a"}" · type=${nav.type} · ` +
+        `deliveryType="${nav.deliveryType !== undefined ? nav.deliveryType : "n/a"}" · type=${nav.type} · ` +
           `TTFB ${Math.round(nav.responseStart - nav.startTime)}ms · DCL ${Math.round(nav.domContentLoadedEventEnd)}ms`
       );
     }
@@ -285,6 +282,65 @@
     currentFloorId = currentFloorFromScroll();
     syncMirrorFrameScroll();
     updateFallbackLinks();
+    scheduleTease();
+  }
+
+  // --- Amorce : donner envie de glisser --------------------------------
+  // Le geste est invisible (aucun bouton) : sans indice, la plupart des
+  // visiteurs ne verraient jamais l'autre face. Au premier arrêt du
+  // défilement (le visiteur lit), l'autre face se dévoile un instant sur
+  // TEASE_RATIO de la largeur, ligne de scan visible, puis se retire.
+  // Une fois par session, jamais pendant un geste, jamais en reduced-motion
+  // ni après une arrivée par swipe (le visiteur connaît déjà le geste).
+  const TEASE_KEY = "swTeased";
+  const TEASE_RATIO = 0.08;
+  const TEASE_MIN_PX = 36;
+  const TEASE_IDLE_MS = 900; // immobilité qui compte comme « arrêt »
+  const TEASE_MIN_SCROLL = 0.4; // fraction d'écran déjà parcourue
+  let teaseTimer = 0;
+  let teasing = 0; // 0 = non, sinon minuterie du retour
+  let teaseDone = false;
+  try {
+    teaseDone = sessionStorage.getItem(TEASE_KEY) === "1";
+  } catch (_) {
+    /* stockage indisponible : une amorce par page */
+  }
+
+  function scheduleTease() {
+    if (teaseDone || isEmbedded || reduceMotion) return;
+    window.clearTimeout(teaseTimer);
+    teaseTimer = window.setTimeout(tease, TEASE_IDLE_MS);
+  }
+
+  function tease() {
+    if (teaseDone || dragging || committed || !mirrorFrameReady) return;
+    if (document.visibilityState !== "visible") return;
+    if (window.scrollY < window.innerHeight * TEASE_MIN_SCROLL) return;
+    teaseDone = true;
+    try {
+      sessionStorage.setItem(TEASE_KEY, "1");
+    } catch (_) {
+      /* idem */
+    }
+    const w = window.innerWidth;
+    const peek = Math.max(TEASE_MIN_PX, w * TEASE_RATIO);
+    wakeMirror();
+    document.body.classList.add("teasing");
+    debugLog("amorce : l'autre face se dévoile");
+    placeMirror(NEIGHBOR_DIRECTION * (w - peek), 650, "cubic-bezier(0.33, 1, 0.68, 1)");
+    teasing = window.setTimeout(() => {
+      placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 550, "cubic-bezier(0.32, 0, 0.67, 0)");
+      teasing = window.setTimeout(endTease, 560);
+    }, 650 + 700);
+  }
+
+  // Fin (ou interruption par un doigt / clic : le geste part du repos).
+  function endTease(interrupted) {
+    if (!teasing) return;
+    window.clearTimeout(teasing);
+    teasing = 0;
+    if (interrupted) placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
+    document.body.classList.remove("teasing");
   }
 
   // lang-switch.js recrée entièrement les sections .floor (innerHTML =
@@ -327,7 +383,10 @@
   function goToMirrorReal() {
     const ua = navigator.userActivation ? navigator.userActivation.isActive : null;
     const flags = (ua ? FLAG_USER_ACTIVATION : 0) | (DEBUG ? FLAG_DEBUG : 0);
-    const payload = `${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
+    // 5e champ : tick figé en millièmes (entier, le "." sert de séparateur),
+    // vide si la simulation tourne. Ignoré par les versions antérieures.
+    const pt = pausedTickNow();
+    const payload = `${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}.${pt === null ? "" : Math.round(pt * 1000)}`;
     debugLog(`départ: navigation (${SPEC_RULES ? "window.name" : "fragment"}) · userActivation ${ua}`);
     if (SPEC_RULES) {
       window.name = NAME_PREFIX + payload;
@@ -360,7 +419,9 @@
 
   // speed (facultatif) : vitesse du doigt vers le voisin au lâcher (px/ms).
   // Sans vitesse (lien de secours, durée imposée) : courbe d'origine.
+  let settleTimer = 0;
   function settleCommitted(durationMs, speed) {
+    window.clearTimeout(settleTimer);
     const w = window.innerWidth;
     let ms = durationMs || SETTLE_MS;
     let ease = null;
@@ -389,7 +450,9 @@
     document.body.classList.add("settling");
     if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", "0px");
     placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, ms, ease);
-    window.setTimeout(() => {
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(() => {
+      settleTimer = 0;
       document.body.classList.remove("settling");
     }, ms);
   }
@@ -568,6 +631,12 @@
   // --- Souris : Pointer Events ---
   function onPointerDown(e) {
     if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
+    armMirror();
+    endTease(true);
+    // Nouveau contact : le clic éventuel d'un geste précédent est passé
+    // (sinon un swipe tactile, qui ne produit pas de clic, laissait le
+    // drapeau levé et avalait le tap suivant, ex. sur le bouton de langue).
+    hadDragMotion = false;
     if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest(FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
     wakeMirror();
@@ -585,6 +654,17 @@
   function onPointerMove(e) {
     if (!dragging || e.pointerId !== pointerId) return;
     updateDrag(e.clientX, e.clientY, e);
+    // Capture une fois le vrai geste engagé (son clic est de toute façon
+    // annulé) : le relâchement hors de la fenêtre arrive quand même ici,
+    // sinon le drag restait accroché au curseur. Pas dès le pointerdown :
+    // la capture déplacerait la cible du clic d'un simple tap sur un bouton.
+    if (hadDragMotion && !document.documentElement.hasPointerCapture(e.pointerId)) {
+      try {
+        document.documentElement.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* pointeur déjà relâché */
+      }
+    }
   }
 
   function onPointerUp(e) {
@@ -592,9 +672,17 @@
     endDrag();
   }
 
+  function onPointerCancel(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    abortDrag();
+  }
+
   // --- Tactile : Touch Events ---
   function onTouchStart(e) {
     if (dragging) return; // un doigt déjà suivi
+    hadDragMotion = false; // cf. onPointerDown
+    armMirror();
+    endTease(true);
     wakeMirror();
     if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
     const t = e.touches[0];
@@ -631,7 +719,7 @@
     abortDrag();
   }
 
-  // Le lien de secours (ex. "Back to the map") n'est PAS imbriqué
+  // Le lien de secours (lien d'en-tête vers l'autre face) n'est PAS imbriqué
   // dans un étage : son href doit suivre l'étage courant en continu,
   // pas être figé une fois pour toutes sur "hero" au chargement.
   function updateFallbackLinks() {
@@ -646,6 +734,7 @@
     iframe.id = "mirror-frame";
     iframe.src = `${MIRROR_URL}?embedded=1`;
     iframe.setAttribute("aria-hidden", "true");
+    iframe.title = "Aperçu de l’autre face du site";
     iframe.tabIndex = -1;
     // Largeur/hauteur en px exacts (pas 100vw/100vh en CSS) : sur mobile,
     // 100vw ne correspond pas toujours pixel pour pixel à window.innerWidth
@@ -655,6 +744,7 @@
     iframe.style.width = `${window.innerWidth}px`;
     iframe.style.height = `${window.innerHeight}px`;
     iframe.addEventListener("load", () => {
+      if (!mirrorFrameReady && window.scrollY > 0) scheduleTease();
       mirrorFrameReady = true;
       syncMirrorFrameScroll();
     });
@@ -692,6 +782,77 @@
     });
   }
 
+  // --- Aperçu miroir chargé à la première intention ---------------------
+  // L'iframe (une deuxième page complète, deux contextes WebGL, ~120 Mo)
+  // et le préchargement de l'autre face ne servent qu'à qui va glisser.
+  // Les créer dès l'ouverture doublait le poids de chaque visite et
+  // disputait le processeur au démarrage de la page. On attend donc un
+  // premier signe d'activité : doigt posé, défilement, molette, clavier,
+  // souris qui bouge, focus ou survol du lien vers l'autre face. Le
+  // défilement de lecture précède presque toujours le premier swipe :
+  // l'aperçu a le temps d'être prêt (cf. mirrorFrameReady).
+  // Filet : ARM_IDLE_MS après le chargement sans aucune interaction (un
+  // visiteur qui lit l'accueil puis glisse directement).
+  // Data saver ou réseau très lent : seulement sur un geste explicite
+  // (doigt posé, clic, lien) ; le tout premier geste peut alors ne rien
+  // faire, le temps que l'aperçu charge.
+  const ARM_IDLE_MS = 5000;
+  const ARM_EVENTS = ["scroll", "wheel", "keydown", "mousemove", "focusin"];
+  let mirrorArmed = false;
+  let armTimer = 0;
+
+  function frugalNetwork() {
+    const c = navigator.connection;
+    return !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || "")));
+  }
+
+  function armMirror() {
+    if (mirrorArmed || isEmbedded || reduceMotion) return;
+    mirrorArmed = true;
+    window.clearTimeout(armTimer);
+    for (const t of ARM_EVENTS) window.removeEventListener(t, onArmEvent, true);
+    debugLog("aperçu miroir : création (première intention)");
+    addPrefetchRule();
+    createMirrorFrame();
+  }
+
+  let firstMouse = null;
+  function onArmEvent(e) {
+    // focus/survol : seulement le lien vers l'autre face (intention claire)
+    if (e.type === "focusin" && !e.target.closest("[data-mirror-link]")) return;
+    if (e.type === "mousemove") {
+      if (frugalNetwork() && !e.target.closest("[data-mirror-link]")) return;
+      // Chrome émet un mousemove synthétique au chargement, sous un curseur
+      // immobile : seul un vrai déplacement compte.
+      if (!firstMouse) {
+        firstMouse = [e.screenX, e.screenY];
+        return;
+      }
+      if (Math.abs(e.screenX - firstMouse[0]) + Math.abs(e.screenY - firstMouse[1]) < 8) return;
+    }
+    armMirror();
+  }
+
+  function scheduleArm(arrival) {
+    // Arrivée par swipe : le visiteur sait glisser, il reviendra sans doute.
+    if (arrival) {
+      teaseDone = true; // le visiteur connaît déjà le geste
+      return armMirror();
+    }
+    if (frugalNetwork()) {
+      // seuls les gestes explicites (pointerdown/touchstart) et le lien arment
+      window.addEventListener("focusin", onArmEvent, true);
+      window.addEventListener("mousemove", onArmEvent, true);
+      return;
+    }
+    for (const t of ARM_EVENTS) window.addEventListener(t, onArmEvent, { capture: true, passive: true });
+    const idle = () => {
+      armTimer = window.setTimeout(armMirror, ARM_IDLE_MS);
+    };
+    if (document.readyState === "complete") idle();
+    else window.addEventListener("load", idle, { once: true });
+  }
+
   function listenForSync() {
     window.addEventListener("message", (e) => {
       if (e.origin !== MIRROR_ORIGIN) return;
@@ -703,11 +864,15 @@
         if (!mirrorFrameReady) {
           mirrorFrameReady = true;
           syncMirrorFrameScroll();
+          // arrêt de défilement survenu avant que l'aperçu soit prêt
+          if (window.scrollY > 0) scheduleTease();
         }
         return;
       }
-      if (data.type !== "sync-scroll") return;
+      // seul le parent (page qui affiche cet aperçu) pilote l'iframe
+      if (data.type !== "sync-scroll" || e.source !== window.parent) return;
       syncIncomingLang(data.lang);
+      syncIncomingPause(data.pausedT);
       if (typeof data.vh === "number" && data.vh > 0) {
         document.documentElement.style.setProperty("--vh", `${data.vh}px`);
       }
@@ -741,7 +906,7 @@
       window.name = ""; // sinon resterait attaché à l'onglet (rechargement, autres navigations)
     }
     if (!raw) return null;
-    const [y, lang, flags, vh] = raw.split(".");
+    const [y, lang, flags, vh, pt] = raw.split(".");
     const f = Number(flags) || 0;
     return {
       scrollY: Number(y) || 0,
@@ -749,6 +914,7 @@
       ua: (f & FLAG_USER_ACTIVATION) !== 0,
       debug: (f & FLAG_DEBUG) !== 0,
       innerHeight: Number(vh) || null,
+      pausedT: pt ? Number(pt) / 1000 : null,
       via,
     };
   }
@@ -761,6 +927,7 @@
   function handleArrival(arrival) {
     if (!arrival) return;
     syncIncomingLang(arrival.lang);
+    syncIncomingPause(arrival.pausedT);
     arrivalScrollY = arrival.scrollY;
     applyArrivalScroll();
   }
@@ -786,6 +953,8 @@
     floors = Array.from(document.querySelectorAll("[data-floor-id]"));
     listenForSync();
     document.addEventListener("floors-rendered", refreshFloors);
+    // pause/reprise sur cette face : l'aperçu miroir suit immédiatement
+    document.addEventListener("sim-pause-change", syncMirrorFrameScroll);
     handleArrival(arrival);
     onScroll();
     reportArrivalMetrics(arrival);
@@ -802,18 +971,21 @@
       requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("no-anim")));
     });
 
+    // Avant le retour anticipé : en reduced-motion, le lien de secours doit
+    // lui aussi suivre l'étage courant (sinon on arrivait en haut de l'autre face).
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     if (reduceMotion || isEmbedded) {
       document.body.classList.add("reduced-motion");
       return; // pas de drag élastique, seulement les liens de secours
     }
 
-    addPrefetchRule();
-    createMirrorFrame();
+    scheduleArm(arrival);
 
-    window.addEventListener("scroll", onScroll, { passive: true });
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
     document.addEventListener("touchstart", onTouchStart, { passive: true });
     document.addEventListener("touchmove", onTouchMove, { passive: false });
     document.addEventListener("touchend", onTouchEnd);
@@ -840,15 +1012,20 @@
       true
     );
 
-    // Le lien de secours ("Back to the map"...) déclenche la même
+    // Le lien de secours (lien d'en-tête vers l'autre face) déclenche la même
     // animation de bascule qu'un drag mené jusqu'au bout à la main,
     // plutôt qu'un saut d'ancre natif instantané.
     document.addEventListener("click", (e) => {
       const link = e.target.closest("[data-mirror-link]");
       if (!link) return;
       e.preventDefault();
+      if (committed) return; // déjà en route (double clic)
+      endTease(); // la bascule repart de la position de l'amorce
       dragging = false;
       committed = true;
+      // Aperçu pas encore prêt (clic juste après l'ouverture, réseau
+      // économe) : rien à révéler, on part tout de suite.
+      if (!mirrorFrameReady) return goToMirrorReal();
       settleCommitted(BUTTON_SETTLE_MS);
     });
   }

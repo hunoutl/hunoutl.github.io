@@ -308,7 +308,9 @@
         if (c.dataset.card === "hero2" && !L.m) {
           const VH = "var(--vh, 100vh)";
           // plafond : ne jamais descendre sur le panneau de l'étage suivant
-          const cap = L.byId.vents.top + L.cards.vents.y - 24 - c.offsetHeight;
+          // (au-dessus du cartouche ET du plan de coupe du navire)
+          const below = Math.min(L.cards.vents.y, L.ship.y - L.ship.h / 2);
+          const cap = L.byId.vents.top + below - 24 - c.offsetHeight;
           c.style.top = `max(${b.y}px, min(calc(${VH} + 40px), ${Math.round(cap)}px, calc(${b.y}px + (${b.y + 290}px - ${VH}) * 1000)))`;
         }
       });
@@ -732,7 +734,17 @@
       ctx.fillStyle = PH;
       for (const [px, py] of [[-sp, 7 * k], [0, -12 * k], [sp, 7 * k], [0, -5 * k]]) ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
       ctx.restore();
-      if (s > 0.3) tag(ctx, kx + sp + 6, ky, "kite · 2 lines · job 0x2a", AMBER);
+      if (s > 0.3) {
+        // l'aile réelle (référence perso) ; à gauche de l'aile si la
+        // place manque à droite (mobile)
+        const l1 = "kite · eleveight RS · 12 m² · 2025";
+        const l2 = "2 lines · job 0x2a";
+        ctx.font = `10px ${MONO}`;
+        const lw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width);
+        const lx = kx + sp + 6 + lw + 4 > window.innerWidth ? kx - sp - 6 - lw : kx + sp + 6;
+        tag(ctx, lx, ky, l1, AMBER);
+        tag(ctx, lx, ky + 13, l2, AMBER);
+      }
       return;
     }
     ctx.strokeStyle = AMBER;
@@ -768,11 +780,11 @@
       lastHud = q;
       hud.step.textContent = String(Math.floor(v.tf / SIM.PSTEP)).slice(-7);
       hud.t.textContent = ((v.tsec % 100000) | 0).toString();
-      const tot = count[0] + count[1] + count[2] + count[3] || 1;
+      const tot = count[0] + count[1] + count[2] + count[3];
       hud.tr.textContent = String(tot);
       hud.pk.textContent = String(count[4]);
       const bars = hud.bars.children;
-      for (let r = 0; r < 4; r++) bars[r].style.width = `${((count[r] / tot) * 100).toFixed(1)}%`;
+      for (let r = 0; r < 4; r++) bars[r].style.width = `${tot ? ((count[r] / tot) * 100).toFixed(1) : 0}%`;
     }
   };
 

@@ -17,50 +17,54 @@ const SOCIAL = [
   { href: "https://huggingface.co/hunoutl", name: "huggingface", handle: "hunoutl", icon: ICON_HF },
 ];
 
-// Les 5 parties du navire de la Façade = les 5 couches de la stack (même ordre que GEO.ship().parts).
+// Les 5 parties du navire de la Façade = les 5 couches de la stack, dans le
+// MÊME ordre que PARTS côté Façade et GEO.ship().parts : voiles = IA,
+// coque = infra, barre = langages, carré = transmission, pavillons = langues.
 const STACK = {
   en: [
-    ["ai_training", "PyTorch, TensorFlow, Transformers, Hugging Face, vLLM, Llama.cpp · FSDP, DDP, ZeRO, TP/PP, bf16, fp8, NCCL, DeepSpeed · MLflow, W&amp;B · agents, n8n"],
-    ["infra", "Proxmox, Slurm, Docker, Singularity, Kubernetes, Argo CD, Spack, CI/CD, Ray, Dask, Airflow, DVC · OpenMP, MPI · AWS (EKS, EC2, S3, Lambda, IAM)"],
-    ["teaching", "Fidle, DLO-JZ, Panoram'IA, X-HEC · workshops, hackathons, AI-DevTalks"],
+    ["ai_training", "PyTorch, TensorFlow, Transformers, Hugging Face, vLLM, llama.cpp · FSDP, DDP, ZeRO, TP/PP, bf16, fp8, NCCL, DeepSpeed · MLflow, W&amp;B · agents, n8n"],
+    ["infra", "Proxmox, Slurm, Docker, Apptainer (Singularity), Kubernetes, Argo CD, Spack, CI/CD, Ray, Dask, Airflow, DVC · OpenMP, MPI · AWS (EKS, EC2, S3, Lambda, IAM)"],
     ["lang", "Python, C/C++, Bash, Julia, MATLAB, LaTeX"],
+    ["teaching", "Fidle, DLO-JZ, Panoram'IA, X-HEC · workshops, hackathons, AI-DevTalks"],
     ["human_lang", "fr: native · en: fluent"],
   ],
   fr: [
-    ["ai_training", "PyTorch, TensorFlow, Transformers, Hugging Face, vLLM, Llama.cpp · FSDP, DDP, ZeRO, TP/PP, bf16, fp8, NCCL, DeepSpeed · MLflow, W&amp;B · agents, n8n"],
-    ["infra", "Proxmox, Slurm, Docker, Singularity, Kubernetes, Argo CD, Spack, CI/CD, Ray, Dask, Airflow, DVC · OpenMP, MPI · AWS (EKS, EC2, S3, Lambda, IAM)"],
-    ["teaching", "Fidle, DLO-JZ, Panoram'IA, X-HEC · ateliers, hackathons, AI-DevTalks"],
+    ["ai_training", "PyTorch, TensorFlow, Transformers, Hugging Face, vLLM, llama.cpp · FSDP, DDP, ZeRO, TP/PP, bf16, fp8, NCCL, DeepSpeed · MLflow, W&amp;B · agents, n8n"],
+    ["infra", "Proxmox, Slurm, Docker, Apptainer (Singularity), Kubernetes, Argo CD, Spack, CI/CD, Ray, Dask, Airflow, DVC · OpenMP, MPI · AWS (EKS, EC2, S3, Lambda, IAM)"],
     ["lang", "Python, C/C++, Bash, Julia, MATLAB, LaTeX"],
+    ["teaching", "Fidle, DLO-JZ, Panoram'IA, X-HEC · ateliers, hackathons, AI-DevTalks"],
     ["human_lang", "fr : natif · en : courant"],
   ],
 };
 
 const T = {
   en: {
-    sub: "AI/HPC engineer · uptime 5+ yrs · large-scale AI &amp; HPC infra",
+    sub: "AI/HPC Engineer · uptime 5+ yrs · large-scale AI &amp; HPC infra",
     lede: "Multi-node GPU training, supercomputer ops, hybrid cloud/on-prem orchestration. Distributed training internals (FSDP/DDP/ZeRO, NCCL, tensor/pipeline parallelism), Slurm, Kubernetes, MPI/OpenMP.",
     hint: "scroll → camera climbs through cloud.layer: pitch φ 9° → 90°, perspective → plan view",
-    about: "Optimizing GPU clusters is only half the job — the other half is making that compute usable by people who aren't systems experts. 4 years supporting 3000+ researchers on Jean Zay (one of France's largest supercomputers) taught me as much about NCCL tuning and multi-node scaling as about writing docs and giving talks that don't assume prior HPC knowledge.",
+    about: "Optimizing GPU clusters is only half the job — the other half is making that compute usable by people who aren't systems experts. 4 years supporting ~3,000 researchers on Jean Zay (one of France's largest supercomputers) taught me as much about NCCL tuning and multi-node scaling as about writing docs and giving talks that don't assume prior HPC knowledge.",
     note: "Toy simulation running in your browser: same seed, same wall-clock tick, same positions as the human side. The sea is a domain split into 4 MPI-style ranks; islands are masked cells (boundary conditions); tracers within ±12 px of an interface are copied as ghosts (hollow squares) into the neighbour rank; numbers in cells are the live swell height h(x,t). Not a real cluster.",
     forcesP: "The human map draws a ship in cross-section; under it, the same drawing is the software stack, layer by layer. Currently applying the same infra instincts to a tighter, quant-research context.",
     readUp: "y axis = abstraction stack, cloud → metal (and time, read backwards).",
   },
   fr: {
-    sub: "Ingénieur AI/HPC · uptime 5+ ans · infra IA &amp; HPC à grande échelle",
-    lede: "Entraînement GPU multi-nœud, exploitation de supercalculateurs, orchestration cloud/on-prem hybride. Internals de l'entraînement distribué (FSDP/DDP/ZeRO, NCCL, parallélisme tenseur/pipeline), Slurm, Kubernetes, MPI/OpenMP.",
+    sub: "AI/HPC Engineer · uptime 5+ ans · infra IA &amp; HPC à grande échelle",
+    lede: "Entraînement GPU multi-nœud, exploitation de supercalculateurs, orchestration cloud/on-prem hybride. Rouages de l'entraînement distribué (FSDP/DDP/ZeRO, NCCL, parallélisme tenseur/pipeline), Slurm, Kubernetes, MPI/OpenMP.",
     hint: "scroll → la caméra traverse cloud.layer : φ 9° → 90°, perspective → vue en plan",
-    about: "Optimiser des clusters GPU n'est que la moitié du travail — l'autre moitié consiste à rendre ce calcul utilisable par des gens qui ne sont pas experts systèmes. 4 ans à supporter plus de 3000 chercheurs sur Jean Zay (l'un des plus gros supercalculateurs français) m'ont autant appris sur le tuning NCCL et le scaling multi-nœud que sur la rédaction de docs et les talks accessibles sans prérequis HPC.",
+    about: "Optimiser des clusters GPU n'est que la moitié du travail — l'autre moitié consiste à rendre ce calcul utilisable par des gens qui ne sont pas experts systèmes. 4 ans à accompagner ~3 000 chercheurs sur Jean Zay (l'un des plus gros supercalculateurs français) m'ont autant appris sur le réglage NCCL et le multi-nœud que sur l'écriture de docs et d'exposés sans prérequis HPC.",
     note: "Simulation jouet exécutée dans votre navigateur : même graine, même tick d'horloge, mêmes positions que la face humaine. La mer = un domaine découpé en 4 rangs façon MPI ; les îles sont des cellules masquées (conditions aux limites) ; les traceurs à moins de 12 px d'une interface sont copiés en fantômes (carrés creux) dans le rang voisin ; les nombres dans les cellules sont la hauteur de houle h(x,t), en direct. Pas un vrai cluster.",
     forcesP: "La carte humaine dessine un navire en coupe ; dessous, le même dessin est la stack logicielle, couche par couche. J'applique aujourd'hui les mêmes réflexes d'infra dans un contexte plus resserré, orienté recherche quantitative.",
     readUp: "axe y = pile d'abstraction, du cloud au métal (et le temps, lu à rebours).",
   },
 };
 
-const job = (when, title, where, text) => `
-  <article class="job"><p class="when">${when}</p><h3>${title}</h3><p class="where">${where}</p>${text ? `<p>${text}</p>` : ""}</article>`;
+// Une étape : [îlot (missions)] · poste · entreprise, contrat, lieu · dates · description.
+const job = (when, title, where, text, isle) => `
+  <article class="job">${isle ? `<p class="isle">${isle}</p>` : ""}<h3>${title}</h3><p class="where">${where} · <span class="when">${when}</span></p>${text ? `<p>${text}</p>` : ""}</article>`;
 const panel = (id, sheet, layer, h2, body) =>
   `<div class="card" data-card="${id}"><div class="bar"><span>${sheet}</span><span>${layer}</span></div><div class="body"><h2>${h2}</h2>${body}</div></div>`;
-const tag = (key, txt, cls) => `<span class="tag${cls ? ` ${cls}` : ""}" data-tag="${key}">${txt}</span>`;
+// Étiquettes posées sur la carte : décor (lues en vrac sinon par les lecteurs d'écran).
+const tag = (key, txt, cls) => `<span aria-hidden="true" class="tag${cls ? ` ${cls}` : ""}" data-tag="${key}">${txt}</span>`;
 const layerMark = (txt) => `<p class="layer-mark" aria-hidden="true"><span>${txt}</span></p>`;
 
 const F = {
@@ -105,11 +109,11 @@ const F = {
         "aujourdhui",
         "SHEET 03/09 · HYBRID",
         "L6",
-        fr ? "cloud hybride" : "hybrid cloud",
-        job(fr ? "2026-02 → auj." : "2026-02 → now", "Senior Consultant", fr ? "Aneo · CDI · Paris et périphérie, hybride" : "Aneo · full-time · Paris area, hybrid", fr ? "Conseil en infra cloud &amp; HPC scalable pour workloads de calcul intensif et recherche quantitative. Chaque mission = un îlot amarré à la cité." : "Advising on scalable cloud &amp; HPC infra for compute-intensive workloads and quant research. Each assignment = an islet moored to the city.") +
-          job(fr ? "mission · en cours" : "assignment · ongoing", fr ? "Agents IA &amp; automatisation" : "AI agents &amp; automation", "ABC Arbitrage", fr ? "Agents IA, workflows n8n. Les automates = les agents." : "AI agents, n8n workflows. The automatons = the agents.") +
-          job(fr ? "mission" : "assignment", "ML Engineer", "ABC Arbitrage", fr ? "Infra AWS EKS + Ray from scratch pour l'expérimentation ML distribuée ; fondations d'un modèle CTA sur futures (expérimentation, évaluation). 1 moulin = 1 nœud Ray." : "AWS EKS + Ray infra from scratch for distributed ML experimentation; foundations of a CTA model for futures (experimentation, evaluation). 1 windmill = 1 Ray node.") +
-          job(fr ? "mission" : "assignment", "Portfolio Platform Engineer", "Capital Fund Management (CFM)", fr ? "Infra cloud hybride sur AWS pour la recherche quantitative ; orchestrateur de DAG en Python soumettant les jobs sur AWS et sur Slurm on-prem. Le tourbillon = le scheduler. Support de 50 chercheurs quant (migration HPC → AWS, environnements, onboarding, prod)." : "Hybrid cloud infra on AWS for quant research; Python DAG orchestrator submitting jobs to AWS and on-prem Slurm. The whirlpool = the scheduler. Supported 50 quant researchers (HPC → AWS migration, environments, onboarding, prod troubleshooting).")
+        fr ? "île aneo · cloud hybride" : "aneo island · hybrid cloud",
+        job(fr ? "2026-02 → auj." : "2026-02 → now", "Senior Consultant", fr ? "Aneo · CDI · Paris et périphérie, hybride" : "Aneo · full-time · Paris area, hybrid", fr ? "Conseil en infrastructure cloud &amp; HPC évolutive pour workloads de calcul intensif et recherche quantitative." : "Consulting on scalable cloud &amp; HPC infrastructure for compute-intensive workloads and quantitative research.") +
+          job(fr ? "mission · en cours" : "assignment · ongoing", fr ? "Agents IA &amp; automatisation" : "AI agents &amp; automation", "ABC Arbitrage", fr ? "Agents IA, workflows d'automatisation n8n." : "AI agents, n8n automation workflows.", "islet: abc-arbitrage") +
+          job(fr ? "mission" : "assignment", "ML Engineer", "ABC Arbitrage", fr ? "Plateforme AWS EKS + Ray from scratch pour l'expérimentation ML distribuée ; fondations d'un modèle CTA (trend-following) sur futures : expérimentation, évaluation." : "AWS EKS + Ray platform from scratch for distributed ML experimentation; foundations of a CTA (trend-following) model on futures: experimentation, evaluation.", "islet: abc-arbitrage") +
+          job(fr ? "mission" : "assignment", "Portfolio Platform Engineer", "Capital Fund Management (CFM)", fr ? "Infra cloud hybride AWS (EC2, S3, Lambda) pour la recherche quant ; orchestrateur de DAG en Python qui soumet chaque job sur AWS ou sur Slurm on-prem. Support de 50 chercheurs quant : migration HPC → AWS, environnements, onboarding, debug en prod." : "Hybrid AWS cloud infra (EC2, S3, Lambda) for quant research; Python DAG orchestrator submitting each job to AWS or on-prem Slurm. Supported 50 quant researchers: HPC → AWS migration, environments, onboarding, prod troubleshooting.", "islet: cfm")
       ) +
       tag("aneo", "on-prem · slurm") + tag("sky", "aws · ec2 / s3 / lambda") + tag("whirl", "scheduler", "it") + tag("cfm", "cfm · dag → aws | slurm", "small") + tag("abc2", "abc · agents · n8n", "small") + tag("abc1", "abc · eks + ray", "small") + tag("bourse", "orchestrator", "it") + tag("harbor", "job ingress · illustrative", "it")
     );
@@ -122,11 +126,11 @@ const F = {
         "dalia",
         "SHEET 04/09 · NVL72",
         "L5",
-        "dalia: NVL72",
-        job("2025-08 → 2026-01", "Sr. AI/HPC Engineer", fr ? "MINERVA European Support Centre for Scalable AI Research and Deployment · CDD · Saclay" : "MINERVA European Support Centre for Scalable AI Research and Deployment · fixed-term · Saclay", fr ? "Déploiement et exploitation du supercalculateur Dalia — 360 PFlop/s (FP16), 72x NVIDIA GB200. Anneau des 72 forges = domaine NVLink, canaux de lave = trafic NVLink." : "Deployed and operated the Dalia supercomputer — 360 PFlop/s (FP16), 72x NVIDIA GB200. Ring of 72 forges = NVLink domain, lava channels = NVLink traffic.") +
-          job("2025-12", fr ? "Chargé de cours — Master Data Science &amp; AI for Business, X-HEC" : "Lecturer — MSc Data Science &amp; AI for Business, X-HEC", fr ? "École Polytechnique · indépendant · Palaiseau" : "École Polytechnique · independent · Palaiseau", "")
+        fr ? "île dalia · cnrs–idris" : "dalia island · cnrs–idris",
+        job("2025-08 → 2026-01", "Sr. AI/HPC Engineer", fr ? "CNRS – IDRIS → projet européen MINERVA · CDD · Saclay" : "CNRS – IDRIS → EU project MINERVA · fixed-term · Saclay", fr ? "Tests de pré-production de Dalia : NVL72, 36× GB200 (72 GPU Blackwell), 360 PFlop/s FP16 avec sparsité. En parallèle : support IA sur Jean Zay, support de projets européens sur d'autres machines." : "Pre-production testing of Dalia: NVL72, 36× GB200 (72 Blackwell GPUs), 360 PFlop/s FP16 with sparsity. In parallel: AI support on Jean Zay, support for EU projects on other machines.") +
+          job("2025-12", fr ? "Chargé de cours — Master Data Science &amp; AI for Business, X-HEC" : "Lecturer — MSc Data Science &amp; AI for Business, X-HEC", fr ? "École Polytechnique · indépendant · Palaiseau" : "École Polytechnique · freelance · Palaiseau", "", "islet: x-hec")
       ) +
-      tag("volcano", "72× GB200 · nvlink") + tag("xhec", "x-hec", "small")
+      tag("volcano", "36× GB200 · 72 gpu · nvlink") + tag("xhec", "x-hec", "small")
     );
   },
   jeanzay(l) {
@@ -137,10 +141,10 @@ const F = {
         "jeanzay",
         "SHEET 05/09 · JEAN ZAY",
         "L4",
-        fr ? "jean zay : supercalculateur" : "jean zay: supercomputer",
-        job("2024-03 → 2026-01", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "CNRS · CDD · Saclay" : "CNRS · fixed-term · Saclay", fr ? "Support de 3000+ utilisateurs IA &amp; HPC de Jean Zay (125 PFlop/s, 1456x NVIDIA H100) — de l'ouverture de compte au pré-entraînement et finetuning de LLM. Environnements IA &amp; HPC, benchmarking multi-GPU/multi-nœud, entraînement/finetuning à grande échelle (BLOOM, LLaMA, ViT). Formateur Fidle, DLO-JZ, Panoram'IA." : "3000+ AI &amp; HPC user support on Jean Zay (125 PFlop/s, 1456x NVIDIA H100) — account setup to LLM pre-training &amp; finetuning. AI &amp; HPC software stacks, multi-GPU/multi-node benchmarking, large-scale training/finetuning (BLOOM, LLaMA, ViT). AI trainer for Fidle, DLO-JZ, Panoram'IA.") +
-          job("2022-03 → 2024-02", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "Inria · CDD · Saclay" : "Inria · fixed-term · Saclay", fr ? "Jean Zay, génération précédente — 37 PFlop/s. Support des chercheurs IA (ML classique → pré-entraînement LLM), environnements IA/HPC, entraînement de grands modèles, benchmarks multi-GPU/multi-nœud." : "Jean Zay, previous generation — 37 PFlop/s. AI researcher support (classical ML → LLM pre-training), AI/HPC environments, large-scale model training, multi-GPU/multi-node benchmarks.") +
-          job("2022-03 → 2025-09", fr ? "Formateur — Deep Learning &amp; HPC" : "Lecturer — Deep Learning &amp; HPC", fr ? "FIDLE · à distance" : "FIDLE · remote", "")
+        fr ? "île jean zay · idris" : "jean zay island · idris",
+        job("2024-03 → 2025-07", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "CNRS – IDRIS · CDD · Saclay" : "CNRS – IDRIS · fixed-term · Saclay", fr ? "Support de ~3 000 utilisateurs IA &amp; HPC de Jean Zay (extension H100 : 1 456× H100, 125 PFlop/s), de l'ouverture de compte au pré-entraînement et au fine-tuning de LLM. Stacks logicielles IA &amp; HPC, benchmarks multi-GPU / multi-nœud, entraînement et fine-tuning à grande échelle (BLOOM, Llama, ViT). Formateur Fidle, DLO-JZ, Panoram'IA ; ateliers, hackathons, AI-DevTalks." : "Support for ~3,000 AI &amp; HPC users of Jean Zay (H100 extension: 1,456× H100, 125 PFlop/s), from account setup to LLM pre-training and fine-tuning. AI &amp; HPC software stacks, multi-GPU / multi-node benchmarks, large-scale training and fine-tuning (BLOOM, Llama, ViT). Trainer for Fidle, DLO-JZ, Panoram'IA; workshops, hackathons, AI-DevTalks.") +
+          job("2022-03 → 2024-02", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "Inria @ IDRIS · CDD · Saclay" : "Inria @ IDRIS · fixed-term · Saclay", fr ? "Jean Zay, génération précédente (extension A100, 37 PFlop/s). Support IA de ~2 500 chercheurs CNRS / Inria / CEA (ML classique → pré-entraînement de LLM), environnements IA/HPC, benchmarks multi-GPU / multi-nœud. 20 % sur StarPU (runtime à tâches d'Inria pour architectures hétérogènes)." : "Jean Zay, previous generation (A100 extension, 37 PFlop/s). AI support for ~2,500 CNRS / Inria / CEA researchers (classical ML → LLM pre-training), AI/HPC environments, multi-GPU / multi-node benchmarks. 20% on StarPU (Inria task-based runtime for heterogeneous architectures).", "islet: inria") +
+          job("2022-03 → 2025-09", fr ? "Formateur — Deep Learning &amp; HPC" : "Lecturer — Deep Learning &amp; HPC", fr ? "FIDLE · à distance" : "FIDLE · remote", "", "islet: fidle")
       ) +
       tag("jeanzay", "1456× H100 · 125 PFlop/s") + tag("newCity", "cnrs · 52×28 = 1456 gpu", "it") + tag("oldCity", fr ? "inria · gén. préc. · 37 PFlop/s" : "inria · prev gen · 37 PFlop/s", "it") + tag("citadel", "slurm ctl · illustrative", "it") +
       tag("fidle", "fidle", "small") + tag("dlojz", "dlo-jz", "small") + tag("panoramia", "panoram'ia", "small")
@@ -154,8 +158,8 @@ const F = {
         "atos",
         "SHEET 06/09 · EDGE",
         "L2",
-        fr ? "edge : inférence" : "edge: inference",
-        job("2021-02 → 2021-08", fr ? "Ingénieur IA embarquée (stage)" : "Embedded AI Engineer (intern)", "Atos, Toulouse", fr ? "Système embarqué full-stack piloté par IA, détection de défauts de surface en temps réel : YOLOv4/Faster R-CNN sur Jetson Nano, −80 % de latence (quantization &amp; pruning). Le faisceau = la boucle d'inférence." : "Full-stack AI-powered embedded system for real-time surface defect detection: YOLOv4/Faster R-CNN on Jetson Nano, −80% latency via quantization &amp; pruning. The beam = the inference loop.")
+        fr ? "île atos · inférence edge" : "atos island · edge inference",
+        job("2021-02 → 2021-08", fr ? "Ingénieur IA embarquée (stage)" : "Embedded AI Engineer (intern)", "Atos, Toulouse", fr ? "Système embarqué full-stack de détection de défauts de surface en temps réel : YOLOv4 / Faster R-CNN sur Jetson Nano, −80 % de latence (quantification, élagage)." : "Full-stack embedded system for real-time surface defect detection: YOLOv4 / Faster R-CNN on Jetson Nano, −80% latency (quantization, pruning).")
       ) + tag("atos", "jetson nano") + tag("light", "inference loop", "it") + tag("belt", "qc pipeline", "it")
     );
   },
@@ -167,25 +171,25 @@ const F = {
         "spascia",
         "SHEET 07/09 · BARE METAL",
         "L1",
-        "bare metal: 110 × arm",
-        job("2020-03 → 2020-08", fr ? "Ingénieur infrastructure (stage)" : "Infrastructure Engineer (intern)", "SPASCIA, Ramonville-Saint-Agne", fr ? "Cluster ARM-SBC 110 nœuds (440 cœurs CPU) pour RL asynchrone — OS sur mesure, automatisation, monitoring, services web. 1 cabane = 1 nœud : les 110 sont dessinés." : "110-node ARM-SBC cluster (440 CPU cores) for async RL training — custom OS, automation, monitoring, web services. 1 hut = 1 node: all 110 are drawn.")
+        fr ? "île spascia · bare metal" : "spascia island · bare metal",
+        job("2020-03 → 2020-08", fr ? "Ingénieur infrastructure (stage)" : "Infrastructure Engineer (intern)", "SPASCIA, Ramonville-Saint-Agne", fr ? "Cluster ARM-SBC de 110 nœuds (440 cœurs CPU) pour l'entraînement RL asynchrone : OS sur mesure, automatisation, monitoring, services web." : "110-node ARM-SBC cluster (440 CPU cores) for asynchronous RL training: custom OS, automation, monitoring, web services.")
       ) + tag("spascia", "110 nodes · 440 cores") + tag("chemlab", "monitoring · web services", "it")
     );
   },
   origines(l) {
     const fr = l === "fr";
     const edu = fr
-      ? [["2016–2021", "Ingénierie des Systèmes Industriels / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "échange · Master Génie Électrique", "École de Technologie Supérieure, Montréal"], ["2020-10", "TOEIC C1 (965/990)", "émis"]]
-      : [["2016–2021", "Industrial Systems Engineering / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "exchange · MSc Electrical Engineering", "École de Technologie Supérieure, Montréal"], ["2020-10", "TOEIC C1 (965/990)", "issued"]];
+      ? [["2016–2021", "diplôme d'ingénieur (grade master) · Systèmes industriels / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "échange · Master Génie Électrique", "École de Technologie Supérieure, Montréal", "islet: éts"], ["2020-10", "TOEIC C1 (965/990)", "obtenu"]]
+      : [["2016–2021", "engineering degree (Master's level) · Industrial Systems / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "exchange · MSc Electrical Engineering", "École de Technologie Supérieure, Montréal", "islet: éts"], ["2020-10", "TOEIC C1 (965/990)", "obtained"]];
     return (
       layerMark("L0 · boot") +
-      panel("origines", "SHEET 08/09 · BOOT", "L0", "init()", `<p>${fr ? "Conditions initiales : BIOS, puis le reste du système." : "Initial conditions: BIOS, then the rest of the system."}</p>` + edu.map(([a, b, c]) => job(a, b, c, "")).join("")) +
+      panel("origines", "SHEET 08/09 · BOOT", "L0", fr ? "île insa · formation" : "insa island · education", edu.map(([a, b, c, i]) => job(a, b, c, "", i)).join("")) +
       tag("port", "insa · blois") + tag("yard", "bios · init()", "it") + tag("ets", "éts · montréal", "small") + tag("forest", "rng seeds · initial conditions", "it")
     );
   },
   contact(l) {
     const fr = l === "fr";
-    const links = SOCIAL.map((s) => `<a href="${s.href}" target="_blank" rel="noopener">${s.icon}<span>${s.name}</span><small>${s.handle}</small></a>`).join("");
+    const links = SOCIAL.map((s) => `<a href="${s.href}" target="_blank" rel="me noopener">${s.icon}<span>${s.name}</span><small>${s.handle}</small></a>`).join("");
     return (
       layerMark("./launch") +
       panel("contact", "SHEET 09/09 · ENDPOINTS", "./launch", "./launch", `<p class="big">$ ssh hunoutl@next-voyage</p><p>${fr ? "Endpoints :" : "Endpoints:"}</p><div class="links">${links}</div>`) +

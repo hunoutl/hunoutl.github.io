@@ -39,6 +39,12 @@ body {
   font-size: 13.5px;
   line-height: 1.55;
   overflow-x: hidden;
+  /* pan-y : scroll vertical natif (fluide, avec inertie) ; le swipe
+     horizontal est géré par les Touch Events de drag-swipe.js, qui
+     s'appuient sur cette règle — lire le commentaire là-bas avant d'y
+     toucher. */
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -57,9 +63,29 @@ body {
 .part { position: absolute; z-index: 1; font-size: 11px; color: var(--cy); white-space: nowrap; background: rgba(2, 6, 4, .85); padding: 0 3px; }
 .winds em { font-style: normal; color: var(--dim); font-weight: 400; }
 
-#floors { position: relative; transition: opacity 0.18s; }
-#floors.lang-fading { opacity: 0; }
+#floors { position: relative; }
+/* Changement de langue : seuls les TEXTES fondent. Une opacité sur #floors
+   en faisait un contexte d'empilement : le titre et le premier cartouche
+   (z-index 7) passaient sous les nuages (6) le temps du fondu, et les îles,
+   identiques d'une langue à l'autre, clignotaient avec. On fait fondre le
+   contenu des cartouches, pas les cartouches : leur fond et le voile du
+   titre restent en place, les nuages ne réapparaissent pas derrière.
+   Sans fond propre (étiquettes .tag, consigne de défilement) : elles
+   fondent entières. */
+.floor-inner > :not(.isle-layer) > *,
+.floor-inner > :not(.isle-layer):not(:has(> *)),
+.floor-inner > .scroll-hint { transition: opacity 0.18s; }
+#floors.lang-fading .floor-inner > :not(.isle-layer) > *,
+#floors.lang-fading .floor-inner > :not(.isle-layer):not(:has(> *)),
+#floors.lang-fading .floor-inner > .scroll-hint { opacity: 0; }
 .floor { position: relative; overflow: hidden; }
+/* Le texte n'est jamais coupé par le bas d'un étage : il peut déborder sur
+   le suivant (ex. premier panneau de l'accueil, placé selon la fenêtre).
+   La largeur reste rognée (pas de défilement horizontal). La hauteur des
+   étages couvre normalement le texte (scripts/floor-fit.js). */
+@supports (overflow: clip) {
+  .floor { overflow-x: clip; overflow-y: visible; }
+}
 .floor-inner { position: absolute; inset: 0; }
 .isle-layer { position: absolute; left: 0; top: 0; z-index: 1; overflow: visible; }
 .isle-layer text { font-family: var(--mono); text-anchor: middle; }
@@ -95,11 +121,16 @@ body {
 }
 .card .body { padding: 14px 16px 14px; }
 .card h2 { margin: 0 0 10px; font-size: 22px; line-height: 1.15; font-weight: 700; color: #ffffff; }
-.card h2::before { content: "§ "; color: var(--r1); }
+/* « § » purement décoratif : texte de remplacement vide pour les lecteurs d'écran */
+.card h2::before { content: "§ "; content: "§ " / ""; color: var(--r1); }
+/* focus clavier visible partout (WCAG 2.4.7) */
+:focus-visible { outline: 2px solid var(--r1); outline-offset: 3px; }
 .card p { margin: 0 0 10px; }
 .job { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .card h2 + .job { margin-top: 0; padding-top: 0; border-top: none; }
 .job .when { margin: 0; font-size: 11.5px; color: var(--r2); }
+.job .isle { margin: 0 0 2px; font-size: 11px; color: var(--r1); }
+.job .isle::before { content: "▸ "; }
 .job h3 { margin: 2px 0 0; font-size: 14.5px; line-height: 1.3; color: #fff; }
 .job .where { margin: 2px 0 6px; font-size: 12px; color: var(--dim); }
 .job p:last-child { margin-bottom: 0; }
@@ -131,6 +162,16 @@ body {
 
 /* hero : textes au-dessus des nuages (#clouds, z 6) */
 .sky-title, .card.about, .scroll-hint { z-index: 7; }
+/* voile derrière le titre : les nuages filaires ne barrent plus les lignes */
+.sky-title::before {
+  content: "";
+  position: absolute;
+  inset: -18px -28px -22px -28px;
+  z-index: -1;
+  background: rgba(2, 6, 4, 0.88);
+  border-radius: 48px;
+  filter: blur(18px);
+}
 .sky-title p, .sky-title h1 { text-shadow: 0 0 4px #020604, 0 0 10px #020604; }
 .sky-title { pointer-events: none; }
 .sky-title .prompt { margin: 0; color: var(--r1); font-size: 13px; }
@@ -196,7 +237,7 @@ body {
 }
 .brand { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand i { font-style: normal; color: var(--dim); }
-.mirror-hint, .lang-switch {
+.mirror-hint, .lang-switch, .bar-btn {
   font-family: var(--mono);
   font-size: 12px;
   background: transparent;
@@ -208,7 +249,26 @@ body {
   white-space: nowrap;
 }
 .mirror-hint { border-color: var(--r1); color: var(--r1); }
-.mirror-hint:hover, .lang-switch:hover { background: var(--r1); color: var(--bg); }
+.mirror-hint:hover, .lang-switch:hover, .bar-btn:hover { background: var(--r1); color: var(--bg); }
+.bar-group { display: flex; align-items: center; gap: 8px; flex: none; }
+.motion-toggle { display: inline-grid; place-items: center; width: 34px; height: 32px; padding: 0; }
+.motion-toggle[hidden] { display: none; }
+.motion-toggle svg { fill: currentColor; }
+.motion-toggle .i-play, .motion-toggle[aria-pressed="true"] .i-pause { display: none; }
+.motion-toggle[aria-pressed="true"] .i-play { display: inline; }
+.cv-soon small { margin-left: 5px; font-size: 0.78em; font-weight: 400; opacity: 0.75; }
+.bar-toast {
+  position: absolute; top: calc(100% + 8px); right: 14px; margin: 0;
+  padding: 6px 12px; font-size: 13px; pointer-events: none;
+  opacity: 0; transform: translateY(-4px); transition: opacity 0.2s, transform 0.2s;
+}
+.bar-toast.on { opacity: 1; transform: none; }
+@media (max-width: 560px) { .cv-soon small { display: none; } }
+@media (max-width: 400px) {
+  .site-bar { gap: 6px; padding: 0 10px; }
+  .bar-group { gap: 6px; }
+}
+.bar-toast { background: var(--bg); color: var(--cy); border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
 @media (max-width: 420px) { .brand i { display: none; } }
 
 /* bascule (calques de drag-swipe.js) */
@@ -234,5 +294,17 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 #scan-line::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #eaffff; box-shadow: 0 0 12px 3px rgba(57, 255, 136, 0.9); }
 .scan-tab { position: absolute; left: -1px; top: 50%; width: 28px; height: 56px; margin-top: -28px; background: var(--bg); border: 1px solid var(--r1); border-left: none; }
 .scan-tab::after { content: ""; position: absolute; left: 7px; top: 21px; width: 9px; height: 9px; border-right: 2px solid var(--r1); border-top: 2px solid var(--r1); transform: rotate(45deg); }
-body.dragging #scan-line, body.settling #scan-line { visibility: visible; }
+body.dragging #scan-line, body.settling #scan-line, body.teasing #scan-line { visibility: visible; }
 body.no-anim #mirror-frame, body.no-anim #mirror-window, body.no-anim #scan-line { transition: none !important; }
+
+/* ---------- sans JavaScript : le CV en colonne lisible ---------- */
+/* Les étages pré-générés au build (tools/build.mjs) ne servent qu'aux
+   lecteurs sans JS ; avec JS (.js), ils sont masqués dès le premier rendu
+   et remplacés par ceux de lang-switch.js. */
+.js .floor-static { display: none; }
+.no-js #sea, .no-js #fx, .no-js #clouds, .no-js .bar-group > button { display: none; }
+.no-js #floors { padding: calc(var(--bar-height, 52px) + 24px) 16px 48px; }
+.no-js .floor { overflow: visible; }
+.no-js .floor-inner { position: static; }
+.no-js .card, .no-js .sky-title { position: static; max-width: 720px; margin: 0 auto 32px; }
+.no-js .tag, .no-js .part, .no-js .inset, .no-js .scroll-hint, .no-js .layer-mark, .no-js .swipe-note, .no-js .hud { display: none; }

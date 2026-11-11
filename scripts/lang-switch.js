@@ -1,12 +1,53 @@
 // Bascule FR/EN locale (même page, pas de navigation) : petit fondu
 // sur le contenu pendant le remplacement, pas de dépendance à
 // l'ancien overlay plein écran (supprimé avec l'architecture iframe).
-const DEFAULT_LANG = "en";
+const DEFAULT_LANG = window.SITE.defaultLang; // cf. site.js
 const STORAGE_KEY = "siteLang";
 
-let currentLang = localStorage.getItem(STORAGE_KEY) || DEFAULT_LANG;
+const LANGS = ["fr", "en"];
+
+// Stockage protégé : cookies bloqués ou iframe tierce → SecurityError.
+// Sans ce garde-fou, currentLang n'est jamais défini et la page reste vide.
+function readStoredLang() {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return LANGS.includes(v) ? v : null;
+  } catch (_) {
+    return null;
+  }
+}
+function storeLang(lang) {
+  try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) { /* stockage indisponible */ }
+}
+
+let currentLang = readStoredLang() || DEFAULT_LANG;
+
+// Typographie au rendu, sur les nœuds texte seulement (jamais le code) :
+// apostrophes courbes partout ; en français, espace insécable avant « : »
+// et « % », espace fine insécable avant « ; ? ! » et dans les guillemets.
+const NBSP = " ";
+const NNBSP = " ";
+function typeset(root, lang) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement && n.parentElement.closest("code, pre, script, style") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    // apostrophes courbes ; milliers jamais coupés en fin de ligne (« 3 000 »)
+    let s = n.nodeValue.replace(/(\p{L})'(\p{L})/gu, "$1’$2").replace(/(\d) (\d{3})(?!\d)/g, `$1${NNBSP}$2`);
+    if (lang === "fr") {
+      s = s
+        .replace(/(\S) ([:%])(?=\s|$)/g, `$1${NBSP}$2`)
+        .replace(/(\S) ([;?!])/g, `$1${NNBSP}$2`)
+        .replace(/« /g, `«${NNBSP}`)
+        .replace(/ »/g, `${NNBSP}»`);
+    }
+    if (s !== n.nodeValue) n.nodeValue = s;
+  }
+}
 
 function renderFloors(lang) {
+  if (!LANGS.includes(lang)) lang = DEFAULT_LANG;
+  document.documentElement.lang = lang;
   const container = document.getElementById("floors");
   container.innerHTML = "";
   for (const floor of FLOORS) {
@@ -17,8 +58,9 @@ function renderFloors(lang) {
     // hauteur fixe (geo.js, identique des deux côtés) AVANT toute
     // restauration de scroll : un même scrollY tombe au même endroit.
     section.style.height = `${GEO.floorHeight(floor.id, GEO.layoutWidth())}px`;
-    const render = floor[lang] || floor[DEFAULT_LANG];
+    const render = floor[lang];
     section.innerHTML = `<div class="floor-inner">${render()}</div>`;
+    typeset(section, lang);
     container.appendChild(section);
   }
   // drag-swipe.js met en cache la liste des étages : elle doit être
@@ -29,12 +71,14 @@ function renderFloors(lang) {
 function updateLangButton() {
   const btn = document.getElementById("lang-switch");
   if (!btn) return;
-  btn.textContent = currentLang === "en" ? "FR" : "EN";
-  btn.setAttribute("aria-label", currentLang === "en" ? "Passer en français" : "Switch to English");
+  btn.textContent = currentLang === "fr" ? "EN" : "FR";
+  // Le nom accessible contient le texte visible (WCAG 2.5.3).
+  btn.setAttribute("aria-label", currentLang === "fr" ? "EN — English version" : "FR — version française");
+  btn.lang = currentLang === "fr" ? "en" : "fr";
 }
 
-// Machine → Façade : la carte se redéplie par-dessus le plan.
-const MIRROR_HINT_LABEL = { fr: "← La carte", en: "← The map" };
+// Libellé du lien vers l'autre face (cf. site.js).
+const MIRROR_HINT_LABEL = window.SITE.mirrorHint;
 
 function updateMirrorHint() {
   const link = document.getElementById("mirror-hint");
@@ -44,11 +88,11 @@ function updateMirrorHint() {
 
 function toggleLanguage() {
   const container = document.getElementById("floors");
-  const nextLang = currentLang === "en" ? "fr" : "en";
+  const nextLang = currentLang === "fr" ? "en" : "fr";
   container.classList.add("lang-fading");
   window.setTimeout(() => {
     currentLang = nextLang;
-    localStorage.setItem(STORAGE_KEY, currentLang);
+    storeLang(currentLang);
     renderFloors(currentLang);
     updateLangButton();
     updateMirrorHint();
