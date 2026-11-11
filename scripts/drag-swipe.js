@@ -14,20 +14,17 @@
   // réécrire cette ligne (MIRROR_URL=...) pour les tests en réseau local.
   const MIRROR_URL = "https://hunoutl.gitlab.io/";
   const MIRROR_ORIGIN = new URL(MIRROR_URL).origin;
-  // Payload d'arrivée transmis dans le fragment d'URL : "#~sw.<scrollY>.<lang>.<flags>".
-  // Pas window.name : Firefox (88+) et Safari le vident sur toute
-  // navigation cross-site — github.io et gitlab.io sont deux sites
-  // distincts (Public Suffix List). Le fragment ne correspond à aucun id
-  // d'élément, donc pas de scroll d'ancre natif ; il est retiré de l'URL
-  // (replaceState) dès la lecture.
-  //
-  // Exception Chromium : le prefetch (Speculation Rules) n'est réutilisé
-  // que si l'URL de navigation est EXACTEMENT l'URL prefetchée, fragment
-  // compris (mesuré : avec "#~sw..." → PrefetchSuccessfulButNotUsed).
-  // Là où les Speculation Rules existent, on garde donc l'URL nue et le
-  // payload passe par window.name, que Chrome conserve en cross-site.
-  // Firefox/Safari (qui vident window.name) n'ont pas de prefetch :
-  // fragment pour eux.
+  // Payload d'arrivée "<scrollY>.<lang>.<flags>.<innerHeight>.<tick figé>"
+  // (dernier champ vide si la simulation tourne), transmis de deux façons :
+  // - Chromium (Speculation Rules) : par window.name, que Chrome conserve en
+  //   cross-site. L'URL de navigation doit rester EXACTEMENT l'URL
+  //   prefetchée, fragment compris (mesuré : avec "#~sw…" →
+  //   PrefetchSuccessfulButNotUsed) ;
+  // - Firefox et Safari (pas de prefetch, et ils vident window.name en
+  //   cross-site — github.io et gitlab.io sont deux sites distincts selon
+  //   la Public Suffix List) : par le fragment d'URL, qui ne correspond à
+  //   aucun id d'élément (pas de scroll d'ancre natif) et est retiré de
+  //   l'URL (replaceState) dès la lecture.
   const PAYLOAD_PREFIX = "#~sw.";
   const NAME_PREFIX = "~sw.";
   const SPEC_RULES = !!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"));
@@ -131,20 +128,10 @@
     return best ? best.id : "hero";
   }
 
-  // On synchronise en pixels ABSOLUS (scrollY), pas en fraction : les deux
-  // sites ont maintenant des hauteurs de page quasi identiques (étages à
-  // hauteur fixe partagée), donc un même scrollY tombe déjà au même
-  // endroit visuel des deux côtés. La fraction (scrollY / (scrollHeight -
-  // hauteur de viewport)) dépendait de la hauteur de viewport mesurée à
-  // l'instant T — sur mobile, cette valeur peut légèrement varier entre le
-  // moment de l'aperçu (pendant le drag) et celui de l'atterrissage réel
-  // (après navigation), ce qui décalait la position de façon intermittente.
-  // Rester en pixels bruts supprime cette dépendance.
-  function scrollFraction() {
-    const max = document.documentElement.scrollHeight - viewportHeight();
-    if (max <= 0) return 0;
-    return Math.min(1, Math.max(0, window.scrollY / max));
-  }
+  // Synchronisation en pixels ABSOLUS (scrollY), pas en fraction de page :
+  // les étages ont la même hauteur des deux côtés (geo.js), donc un même
+  // scrollY tombe au même endroit ; la fraction dépendait de la hauteur de
+  // viewport, qui varie sur mobile entre l'aperçu et l'arrivée.
 
   // Hauteur réelle de "100vh" sur CETTE page (sur mobile : viewport sans
   // la barre d'adresse). Dans l'iframe, 100vh vaudrait la hauteur de
@@ -166,7 +153,7 @@
     if (!mirrorFrame || !mirrorFrameReady) return;
     const lang = typeof currentLang !== "undefined" ? currentLang : undefined;
     mirrorFrame.contentWindow.postMessage(
-      { type: "sync-scroll", scrollY: window.scrollY, lang, vh: measureVh() },
+      { type: "sync-scroll", scrollY: window.scrollY, lang, vh: measureVh(), pausedT: pausedTickNow() },
       MIRROR_ORIGIN
     );
   }
@@ -176,17 +163,28 @@
   // départ prime toujours sur la préférence locale.
   function syncIncomingLang(lang) {
     if (
-      lang &&
+      (lang === "fr" || lang === "en") &&
       typeof currentLang !== "undefined" &&
       lang !== currentLang &&
       typeof renderFloors === "function"
     ) {
       currentLang = lang;
-      localStorage.setItem("siteLang", currentLang);
+      if (typeof storeLang === "function") storeLang(currentLang);
       renderFloors(currentLang);
       if (typeof updateLangButton === "function") updateLangButton();
       if (typeof updateMirrorHint === "function") updateMirrorHint();
     }
+  }
+
+  // Tick figé de la simulation (bouton pause), ou null si elle tourne.
+  function pausedTickNow() {
+    return window.SIM && typeof SIM.pausedTick === "function" ? SIM.pausedTick() : null;
+  }
+  // L'autre face impose son état : figée sur le même tick, ou en marche.
+  function syncIncomingPause(t) {
+    if (!window.SIM || typeof SIM.pause !== "function") return;
+    if (typeof t === "number" && isFinite(t)) SIM.pause(t);
+    else SIM.resume();
   }
 
   function langNow() {
@@ -236,7 +234,7 @@
     }
     if (nav) {
       debugLog(
-        `deliveryType="${nav.deliveryType ?? "n/a"}" · type=${nav.type} · ` +
+        `deliveryType="${nav.deliveryType !== undefined ? nav.deliveryType : "n/a"}" · type=${nav.type} · ` +
           `TTFB ${Math.round(nav.responseStart - nav.startTime)}ms · DCL ${Math.round(nav.domContentLoadedEventEnd)}ms`
       );
     }
@@ -327,7 +325,10 @@
   function goToMirrorReal() {
     const ua = navigator.userActivation ? navigator.userActivation.isActive : null;
     const flags = (ua ? FLAG_USER_ACTIVATION : 0) | (DEBUG ? FLAG_DEBUG : 0);
-    const payload = `${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}`;
+    // 5e champ : tick figé en millièmes (entier, le "." sert de séparateur),
+    // vide si la simulation tourne. Ignoré par les versions antérieures.
+    const pt = pausedTickNow();
+    const payload = `${Math.round(window.scrollY)}.${langNow()}.${flags}.${window.innerHeight}.${pt === null ? "" : Math.round(pt * 1000)}`;
     debugLog(`départ: navigation (${SPEC_RULES ? "window.name" : "fragment"}) · userActivation ${ua}`);
     if (SPEC_RULES) {
       window.name = NAME_PREFIX + payload;
@@ -360,7 +361,9 @@
 
   // speed (facultatif) : vitesse du doigt vers le voisin au lâcher (px/ms).
   // Sans vitesse (lien de secours, durée imposée) : courbe d'origine.
+  let settleTimer = 0;
   function settleCommitted(durationMs, speed) {
+    window.clearTimeout(settleTimer);
     const w = window.innerWidth;
     let ms = durationMs || SETTLE_MS;
     let ease = null;
@@ -389,7 +392,9 @@
     document.body.classList.add("settling");
     if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", "0px");
     placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, ms, ease);
-    window.setTimeout(() => {
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(() => {
+      settleTimer = 0;
       document.body.classList.remove("settling");
     }, ms);
   }
@@ -568,6 +573,10 @@
   // --- Souris : Pointer Events ---
   function onPointerDown(e) {
     if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
+    // Nouveau contact : le clic éventuel d'un geste précédent est passé
+    // (sinon un swipe tactile, qui ne produit pas de clic, laissait le
+    // drapeau levé et avalait le tap suivant, ex. sur le bouton de langue).
+    hadDragMotion = false;
     if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest(FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
     wakeMirror();
@@ -585,6 +594,17 @@
   function onPointerMove(e) {
     if (!dragging || e.pointerId !== pointerId) return;
     updateDrag(e.clientX, e.clientY, e);
+    // Capture une fois le vrai geste engagé (son clic est de toute façon
+    // annulé) : le relâchement hors de la fenêtre arrive quand même ici,
+    // sinon le drag restait accroché au curseur. Pas dès le pointerdown :
+    // la capture déplacerait la cible du clic d'un simple tap sur un bouton.
+    if (hadDragMotion && !document.documentElement.hasPointerCapture(e.pointerId)) {
+      try {
+        document.documentElement.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* pointeur déjà relâché */
+      }
+    }
   }
 
   function onPointerUp(e) {
@@ -592,9 +612,15 @@
     endDrag();
   }
 
+  function onPointerCancel(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    abortDrag();
+  }
+
   // --- Tactile : Touch Events ---
   function onTouchStart(e) {
     if (dragging) return; // un doigt déjà suivi
+    hadDragMotion = false; // cf. onPointerDown
     wakeMirror();
     if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
     const t = e.touches[0];
@@ -646,6 +672,7 @@
     iframe.id = "mirror-frame";
     iframe.src = `${MIRROR_URL}?embedded=1`;
     iframe.setAttribute("aria-hidden", "true");
+    iframe.title = "Aperçu de l’autre face du site";
     iframe.tabIndex = -1;
     // Largeur/hauteur en px exacts (pas 100vw/100vh en CSS) : sur mobile,
     // 100vw ne correspond pas toujours pixel pour pixel à window.innerWidth
@@ -706,8 +733,10 @@
         }
         return;
       }
-      if (data.type !== "sync-scroll") return;
+      // seul le parent (page qui affiche cet aperçu) pilote l'iframe
+      if (data.type !== "sync-scroll" || e.source !== window.parent) return;
       syncIncomingLang(data.lang);
+      syncIncomingPause(data.pausedT);
       if (typeof data.vh === "number" && data.vh > 0) {
         document.documentElement.style.setProperty("--vh", `${data.vh}px`);
       }
@@ -741,7 +770,7 @@
       window.name = ""; // sinon resterait attaché à l'onglet (rechargement, autres navigations)
     }
     if (!raw) return null;
-    const [y, lang, flags, vh] = raw.split(".");
+    const [y, lang, flags, vh, pt] = raw.split(".");
     const f = Number(flags) || 0;
     return {
       scrollY: Number(y) || 0,
@@ -749,6 +778,7 @@
       ua: (f & FLAG_USER_ACTIVATION) !== 0,
       debug: (f & FLAG_DEBUG) !== 0,
       innerHeight: Number(vh) || null,
+      pausedT: pt ? Number(pt) / 1000 : null,
       via,
     };
   }
@@ -761,6 +791,7 @@
   function handleArrival(arrival) {
     if (!arrival) return;
     syncIncomingLang(arrival.lang);
+    syncIncomingPause(arrival.pausedT);
     arrivalScrollY = arrival.scrollY;
     applyArrivalScroll();
   }
@@ -786,6 +817,8 @@
     floors = Array.from(document.querySelectorAll("[data-floor-id]"));
     listenForSync();
     document.addEventListener("floors-rendered", refreshFloors);
+    // pause/reprise sur cette face : l'aperçu miroir suit immédiatement
+    document.addEventListener("sim-pause-change", syncMirrorFrameScroll);
     handleArrival(arrival);
     onScroll();
     reportArrivalMetrics(arrival);
@@ -802,6 +835,10 @@
       requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("no-anim")));
     });
 
+    // Avant le retour anticipé : en reduced-motion, le lien de secours doit
+    // lui aussi suivre l'étage courant (sinon on arrivait en haut de l'autre face).
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     if (reduceMotion || isEmbedded) {
       document.body.classList.add("reduced-motion");
       return; // pas de drag élastique, seulement les liens de secours
@@ -810,10 +847,10 @@
     addPrefetchRule();
     createMirrorFrame();
 
-    window.addEventListener("scroll", onScroll, { passive: true });
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
     document.addEventListener("touchstart", onTouchStart, { passive: true });
     document.addEventListener("touchmove", onTouchMove, { passive: false });
     document.addEventListener("touchend", onTouchEnd);
@@ -847,6 +884,7 @@
       const link = e.target.closest("[data-mirror-link]");
       if (!link) return;
       e.preventDefault();
+      if (committed) return; // déjà en route (double clic)
       dragging = false;
       committed = true;
       settleCommitted(BUTTON_SETTLE_MS);

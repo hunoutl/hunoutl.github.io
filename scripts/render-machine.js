@@ -768,11 +768,11 @@
       lastHud = q;
       hud.step.textContent = String(Math.floor(v.tf / SIM.PSTEP)).slice(-7);
       hud.t.textContent = ((v.tsec % 100000) | 0).toString();
-      const tot = count[0] + count[1] + count[2] + count[3] || 1;
+      const tot = count[0] + count[1] + count[2] + count[3];
       hud.tr.textContent = String(tot);
       hud.pk.textContent = String(count[4]);
       const bars = hud.bars.children;
-      for (let r = 0; r < 4; r++) bars[r].style.width = `${((count[r] / tot) * 100).toFixed(1)}%`;
+      for (let r = 0; r < 4; r++) bars[r].style.width = `${tot ? ((count[r] / tot) * 100).toFixed(1) : 0}%`;
     }
   };
 

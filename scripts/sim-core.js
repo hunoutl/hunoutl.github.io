@@ -44,9 +44,15 @@
     return h >>> 0;
   }
 
+  // Pause (bouton de la barre, WCAG 2.2.2) : la simulation est figée sur
+  // un tick précis, transmis tel quel à l'autre face (iframe miroir et
+  // page d'arrivée) pour que la mer reste identique pendant la bascule.
+  let pausedT = null;
+
   function tickFloat() {
     if (typeof window.__SIM_T === "number") return (window.__SIM_T - EPOCH) / TICK_MS; // hook de test
     if (reduceMotion) return FROZEN_T;
+    if (pausedT !== null) return pausedT;
     return (performance.timeOrigin + performance.now() - EPOCH) / TICK_MS;
   }
 
@@ -646,7 +652,7 @@ gl_FragColor=vec4(col,1.);}`;
     v.frac = v.tf - v.n0;
     v.tsec = (v.tf * TICK_MS) / 1000;
     const key = `${v.n0}|${v.scrollY}|${v.vh}|${v.W}|${SIM.renderKey || ""}`;
-    if ((reduceMotion || typeof window.__SIM_T === "number") && key === lastKey) return;
+    if ((reduceMotion || pausedT !== null || typeof window.__SIM_T === "number") && key === lastKey) return;
     lastKey = key;
     v.cam = camera(SIM.layout, v.scrollY);
     const top = v.cam.flat ? v.scrollY - 120 : -1e9;
@@ -695,6 +701,21 @@ gl_FragColor=vec4(col,1.);}`;
     out[2] = sc * kc.k;
     return out;
   };
+  SIM.pausedTick = () => pausedT;
+  // t : tick auquel figer (celui de l'autre face) ; sinon, l'instant présent.
+  SIM.pause = function (t) {
+    const next = typeof t === "number" && isFinite(t) ? t : tickFloat();
+    if (next === pausedT) return;
+    pausedT = next;
+    lastKey = "";
+    document.dispatchEvent(new CustomEvent("sim-pause-change"));
+  };
+  SIM.resume = function () {
+    if (pausedT === null) return;
+    pausedT = null;
+    lastKey = "";
+    document.dispatchEvent(new CustomEvent("sim-pause-change"));
+  };
   SIM.redraw = function () {
     lastKey = "";
     if (ctx) draw();
@@ -723,6 +744,24 @@ gl_FragColor=vec4(col,1.);}`;
     if (!sea || !initGL(sea)) {
       if (sea) sea.style.display = "none";
       gl = null;
+    } else {
+      // Contexte WebGL perdu (mobile sous pression mémoire, deux contextes
+      // avec l'iframe miroir) : sans ceci, la mer restait noire jusqu'au
+      // rechargement. On accepte la restauration et on renvoie tout au GPU
+      // (les cases non calculées du champ de distance valent déjà CAP).
+      sea.addEventListener("webglcontextlost", (e) => {
+        e.preventDefault();
+        gl = null;
+        distTex = null;
+      });
+      sea.addEventListener("webglcontextrestored", () => {
+        U = {};
+        if (!initGL(sea)) return;
+        uploadDistance();
+        if (DF.d) uploadDistRows(0, DF.ny);
+        uploadPalette();
+        SIM.redraw();
+      });
     }
     sizeCanvas();
     build();

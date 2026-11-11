@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Ne jamais interrompre un déploiement Pages en cours (recommandation GitHub).
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -25,13 +26,14 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       # Fichier unique tout-inline (cf. tools/build.mjs) : condition pour
       # que le prefetch cross-site du document suffise à l'arrivée.
       - run: |
+          for f in scripts/*.js tools/*.mjs; do node --check "$f"; done
           node tools/build.mjs
           mkdir -p _site
-          cp dist/index.html _site/
+          cp dist/index.html robots.txt sitemap.xml _site/
           cp -r assets _site/
       - uses: actions/upload-pages-artifact@v3
         with:

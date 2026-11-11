@@ -36,7 +36,9 @@ function transformScript(path, code) {
     if (!re.test(code)) throw new Error("MIRROR_URL introuvable dans drag-swipe.js");
     code = code.replace(re, `const MIRROR_URL = ${JSON.stringify(mirrorUrl)};`);
   }
-  return code.replace(/<\/script/gi, "<\\/script");
+  // Rien dans le code inliné ne doit pouvoir fermer la balise ou ouvrir un
+  // commentaire HTML (qui changerait le mode d'analyse du <script>).
+  return code.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");
 }
 
 let html = read("index.html");
@@ -49,11 +51,22 @@ html = html.replace(/\s*<link rel="(?:prefetch|preconnect)"[^>]*>/g, "");
 const transformCss = (css) => css.replace(/url\((?:"|')?((?:\.\.\/)?assets\/[\w./-]+\.(?:woff2|webp|png|svg))(?:"|')?\)/g, (_, p) => `url(${dataUri(p.replace(/^\.\.\//, ""))})`);
 // Favicon (SVG) et icône d'écran d'accueil (PNG) inlinées en data URI.
 html = html.replace(/(<link rel="(?:icon|apple-touch-icon)" href=")(assets\/[\w.-]+)"/g, (_, a, p) => `${a}${dataUri(p)}"`);
-html = html.replace(/<link rel="stylesheet" href="([^"]+)" \/>/g, (_, p) => `<style>\n${transformCss(read(p))}</style>`);
-html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, p) => `<script>\n${transformScript(p, read(p))}</script>`);
+// Attributs dans n'importe quel ordre ; un attribut inattendu (defer,
+// type=module…) ferait échouer le build plus bas plutôt que d'être ignoré.
+html = html.replace(/<link\b(?=[^>]*\brel="stylesheet")[^>]*\bhref="([^"]+)"[^>]*>/g, (_, p) =>
+  `<style>\n${transformCss(read(p)).replace(/<\/style/gi, "<\\/style")}</style>`);
+html = html.replace(/<script\b([^>]*)\bsrc="([^"]+)"([^>]*)><\/script>/g, (m, a, p, b) => {
+  if ((a + b).trim()) throw new Error(`Attributs non gérés sur ${m}`);
+  return `<script>\n${transformScript(p, read(p))}</script>`;
+});
 
 const leftovers = html.match(/(?:src|href)="(?!https?:|data:|#|mailto:)[^"]+"/g)?.filter((m) => !m.includes("${"));
-if (leftovers?.length) console.warn("Références locales restantes :", leftovers);
+// Une ressource locale non inlinée casserait l'arrivée par swipe (le
+// prefetch ne couvre que le document) : on refuse de déployer.
+if (leftovers?.length) {
+  console.error("Références locales non inlinées :", leftovers);
+  process.exit(1);
+}
 
 mkdirSync(join(root, "dist"), { recursive: true });
 writeFileSync(join(root, "dist/index.html"), html);

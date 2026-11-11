@@ -39,6 +39,12 @@ body {
   font-size: 13.5px;
   line-height: 1.55;
   overflow-x: hidden;
+  /* pan-y : scroll vertical natif (fluide, avec inertie) ; le swipe
+     horizontal est géré par les Touch Events de drag-swipe.js, qui
+     s'appuient sur cette règle — lire le commentaire là-bas avant d'y
+     toucher. */
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -95,7 +101,10 @@ body {
 }
 .card .body { padding: 14px 16px 14px; }
 .card h2 { margin: 0 0 10px; font-size: 22px; line-height: 1.15; font-weight: 700; color: #ffffff; }
-.card h2::before { content: "§ "; color: var(--r1); }
+/* « § » purement décoratif : texte de remplacement vide pour les lecteurs d'écran */
+.card h2::before { content: "§ "; content: "§ " / ""; color: var(--r1); }
+/* focus clavier visible partout (WCAG 2.4.7) */
+:focus-visible { outline: 2px solid var(--r1); outline-offset: 3px; }
 .card p { margin: 0 0 10px; }
 .job { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .card h2 + .job { margin-top: 0; padding-top: 0; border-top: none; }
@@ -131,6 +140,16 @@ body {
 
 /* hero : textes au-dessus des nuages (#clouds, z 6) */
 .sky-title, .card.about, .scroll-hint { z-index: 7; }
+/* voile derrière le titre : les nuages filaires ne barrent plus les lignes */
+.sky-title::before {
+  content: "";
+  position: absolute;
+  inset: -18px -28px -22px -28px;
+  z-index: -1;
+  background: rgba(2, 6, 4, 0.88);
+  border-radius: 48px;
+  filter: blur(18px);
+}
 .sky-title p, .sky-title h1 { text-shadow: 0 0 4px #020604, 0 0 10px #020604; }
 .sky-title { pointer-events: none; }
 .sky-title .prompt { margin: 0; color: var(--r1); font-size: 13px; }
@@ -196,7 +215,7 @@ body {
 }
 .brand { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand i { font-style: normal; color: var(--dim); }
-.mirror-hint, .lang-switch {
+.mirror-hint, .lang-switch, .bar-btn {
   font-family: var(--mono);
   font-size: 12px;
   background: transparent;
@@ -208,7 +227,26 @@ body {
   white-space: nowrap;
 }
 .mirror-hint { border-color: var(--r1); color: var(--r1); }
-.mirror-hint:hover, .lang-switch:hover { background: var(--r1); color: var(--bg); }
+.mirror-hint:hover, .lang-switch:hover, .bar-btn:hover { background: var(--r1); color: var(--bg); }
+.bar-group { display: flex; align-items: center; gap: 8px; flex: none; }
+.motion-toggle { display: inline-grid; place-items: center; width: 34px; height: 32px; padding: 0; }
+.motion-toggle[hidden] { display: none; }
+.motion-toggle svg { fill: currentColor; }
+.motion-toggle .i-play, .motion-toggle[aria-pressed="true"] .i-pause { display: none; }
+.motion-toggle[aria-pressed="true"] .i-play { display: inline; }
+.cv-soon small { margin-left: 5px; font-size: 0.78em; font-weight: 400; opacity: 0.75; }
+.bar-toast {
+  position: absolute; top: calc(100% + 8px); right: 14px; margin: 0;
+  padding: 6px 12px; font-size: 13px; pointer-events: none;
+  opacity: 0; transform: translateY(-4px); transition: opacity 0.2s, transform 0.2s;
+}
+.bar-toast.on { opacity: 1; transform: none; }
+@media (max-width: 560px) { .cv-soon small { display: none; } }
+@media (max-width: 400px) {
+  .site-bar { gap: 6px; padding: 0 10px; }
+  .bar-group { gap: 6px; }
+}
+.bar-toast { background: var(--bg); color: var(--cy); border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
 @media (max-width: 420px) { .brand i { display: none; } }
 
 /* bascule (calques de drag-swipe.js) */
