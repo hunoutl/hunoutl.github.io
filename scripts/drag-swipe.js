@@ -282,6 +282,65 @@
     currentFloorId = currentFloorFromScroll();
     syncMirrorFrameScroll();
     updateFallbackLinks();
+    scheduleTease();
+  }
+
+  // --- Amorce : donner envie de glisser --------------------------------
+  // Le geste est invisible (aucun bouton) : sans indice, la plupart des
+  // visiteurs ne verraient jamais l'autre face. Au premier arrêt du
+  // défilement (le visiteur lit), l'autre face se dévoile un instant sur
+  // TEASE_RATIO de la largeur, ligne de scan visible, puis se retire.
+  // Une fois par session, jamais pendant un geste, jamais en reduced-motion
+  // ni après une arrivée par swipe (le visiteur connaît déjà le geste).
+  const TEASE_KEY = "swTeased";
+  const TEASE_RATIO = 0.08;
+  const TEASE_MIN_PX = 36;
+  const TEASE_IDLE_MS = 900; // immobilité qui compte comme « arrêt »
+  const TEASE_MIN_SCROLL = 0.4; // fraction d'écran déjà parcourue
+  let teaseTimer = 0;
+  let teasing = 0; // 0 = non, sinon minuterie du retour
+  let teaseDone = false;
+  try {
+    teaseDone = sessionStorage.getItem(TEASE_KEY) === "1";
+  } catch (_) {
+    /* stockage indisponible : une amorce par page */
+  }
+
+  function scheduleTease() {
+    if (teaseDone || isEmbedded || reduceMotion) return;
+    window.clearTimeout(teaseTimer);
+    teaseTimer = window.setTimeout(tease, TEASE_IDLE_MS);
+  }
+
+  function tease() {
+    if (teaseDone || dragging || committed || !mirrorFrameReady) return;
+    if (document.visibilityState !== "visible") return;
+    if (window.scrollY < window.innerHeight * TEASE_MIN_SCROLL) return;
+    teaseDone = true;
+    try {
+      sessionStorage.setItem(TEASE_KEY, "1");
+    } catch (_) {
+      /* idem */
+    }
+    const w = window.innerWidth;
+    const peek = Math.max(TEASE_MIN_PX, w * TEASE_RATIO);
+    wakeMirror();
+    document.body.classList.add("teasing");
+    debugLog("amorce : l'autre face se dévoile");
+    placeMirror(NEIGHBOR_DIRECTION * (w - peek), 650, "cubic-bezier(0.33, 1, 0.68, 1)");
+    teasing = window.setTimeout(() => {
+      placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 550, "cubic-bezier(0.32, 0, 0.67, 0)");
+      teasing = window.setTimeout(endTease, 560);
+    }, 650 + 700);
+  }
+
+  // Fin (ou interruption par un doigt / clic : le geste part du repos).
+  function endTease(interrupted) {
+    if (!teasing) return;
+    window.clearTimeout(teasing);
+    teasing = 0;
+    if (interrupted) placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
+    document.body.classList.remove("teasing");
   }
 
   // lang-switch.js recrée entièrement les sections .floor (innerHTML =
@@ -573,6 +632,7 @@
   function onPointerDown(e) {
     if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
     armMirror();
+    endTease(true);
     // Nouveau contact : le clic éventuel d'un geste précédent est passé
     // (sinon un swipe tactile, qui ne produit pas de clic, laissait le
     // drapeau levé et avalait le tap suivant, ex. sur le bouton de langue).
@@ -622,6 +682,7 @@
     if (dragging) return; // un doigt déjà suivi
     hadDragMotion = false; // cf. onPointerDown
     armMirror();
+    endTease(true);
     wakeMirror();
     if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
     const t = e.touches[0];
@@ -683,6 +744,7 @@
     iframe.style.width = `${window.innerWidth}px`;
     iframe.style.height = `${window.innerHeight}px`;
     iframe.addEventListener("load", () => {
+      if (!mirrorFrameReady && window.scrollY > 0) scheduleTease();
       mirrorFrameReady = true;
       syncMirrorFrameScroll();
     });
@@ -773,7 +835,10 @@
 
   function scheduleArm(arrival) {
     // Arrivée par swipe : le visiteur sait glisser, il reviendra sans doute.
-    if (arrival) return armMirror();
+    if (arrival) {
+      teaseDone = true; // le visiteur connaît déjà le geste
+      return armMirror();
+    }
     if (frugalNetwork()) {
       // seuls les gestes explicites (pointerdown/touchstart) et le lien arment
       window.addEventListener("focusin", onArmEvent, true);
@@ -799,6 +864,8 @@
         if (!mirrorFrameReady) {
           mirrorFrameReady = true;
           syncMirrorFrameScroll();
+          // arrêt de défilement survenu avant que l'aperçu soit prêt
+          if (window.scrollY > 0) scheduleTease();
         }
         return;
       }
@@ -953,6 +1020,7 @@
       if (!link) return;
       e.preventDefault();
       if (committed) return; // déjà en route (double clic)
+      endTease(); // la bascule repart de la position de l'amorce
       dragging = false;
       committed = true;
       // Aperçu pas encore prêt (clic juste après l'ouverture, réseau

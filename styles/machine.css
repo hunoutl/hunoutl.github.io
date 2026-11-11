@@ -129,6 +129,8 @@ body {
 .job { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .card h2 + .job { margin-top: 0; padding-top: 0; border-top: none; }
 .job .when { margin: 0; font-size: 11.5px; color: var(--r2); }
+.job .isle { margin: 0 0 2px; font-size: 11px; color: var(--r1); }
+.job .isle::before { content: "▸ "; }
 .job h3 { margin: 2px 0 0; font-size: 14.5px; line-height: 1.3; color: #fff; }
 .job .where { margin: 2px 0 6px; font-size: 12px; color: var(--dim); }
 .job p:last-child { margin-bottom: 0; }
@@ -292,7 +294,7 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 #scan-line::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #eaffff; box-shadow: 0 0 12px 3px rgba(57, 255, 136, 0.9); }
 .scan-tab { position: absolute; left: -1px; top: 50%; width: 28px; height: 56px; margin-top: -28px; background: var(--bg); border: 1px solid var(--r1); border-left: none; }
 .scan-tab::after { content: ""; position: absolute; left: 7px; top: 21px; width: 9px; height: 9px; border-right: 2px solid var(--r1); border-top: 2px solid var(--r1); transform: rotate(45deg); }
-body.dragging #scan-line, body.settling #scan-line { visibility: visible; }
+body.dragging #scan-line, body.settling #scan-line, body.teasing #scan-line { visibility: visible; }
 body.no-anim #mirror-frame, body.no-anim #mirror-window, body.no-anim #scan-line { transition: none !important; }
 
 /* ---------- sans JavaScript : le CV en colonne lisible ---------- */

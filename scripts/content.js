@@ -58,8 +58,9 @@ const T = {
   },
 };
 
-const job = (when, title, where, text) => `
-  <article class="job"><p class="when">${when}</p><h3>${title}</h3><p class="where">${where}</p>${text ? `<p>${text}</p>` : ""}</article>`;
+// Une étape : [îlot (missions)] · poste · entreprise, contrat, lieu · dates · description.
+const job = (when, title, where, text, isle) => `
+  <article class="job">${isle ? `<p class="isle">${isle}</p>` : ""}<h3>${title}</h3><p class="where">${where} · <span class="when">${when}</span></p>${text ? `<p>${text}</p>` : ""}</article>`;
 const panel = (id, sheet, layer, h2, body) =>
   `<div class="card" data-card="${id}"><div class="bar"><span>${sheet}</span><span>${layer}</span></div><div class="body"><h2>${h2}</h2>${body}</div></div>`;
 // Étiquettes posées sur la carte : décor (lues en vrac sinon par les lecteurs d'écran).
@@ -108,11 +109,11 @@ const F = {
         "aujourdhui",
         "SHEET 03/09 · HYBRID",
         "L6",
-        fr ? "cloud hybride" : "hybrid cloud",
-        job(fr ? "2026-02 → auj." : "2026-02 → now", "Senior Consultant", fr ? "Aneo · CDI · Paris et périphérie, hybride" : "Aneo · full-time · Paris area, hybrid", fr ? "Conseil en infra cloud &amp; HPC évolutive pour le calcul intensif et la recherche quantitative. Chaque mission = un îlot amarré à la cité." : "Advising on scalable cloud &amp; HPC infra for compute-intensive workloads and quant research. Each assignment = an islet moored to the city.") +
-          job(fr ? "mission · en cours" : "assignment · ongoing", fr ? "Agents IA &amp; automatisation" : "AI agents &amp; automation", "ABC Arbitrage", fr ? "Agents IA, workflows n8n. Les automates = les agents." : "AI agents, n8n workflows. The automatons = the agents.") +
-          job(fr ? "mission" : "assignment", "ML Engineer", "ABC Arbitrage", fr ? "Infra AWS EKS + Ray partie de zéro pour l'expérimentation ML distribuée ; fondations d'un modèle CTA sur futures (expérimentation, évaluation). 1 moulin = 1 nœud Ray." : "AWS EKS + Ray infra from scratch for distributed ML experimentation; foundations of a CTA model for futures (experimentation, evaluation). 1 windmill = 1 Ray node.") +
-          job(fr ? "mission" : "assignment", "Portfolio Platform Engineer", "Capital Fund Management (CFM)", fr ? "Infra cloud hybride sur AWS pour la recherche quantitative ; orchestrateur de DAG en Python soumettant les jobs sur AWS et sur Slurm on-prem. Le tourbillon = le scheduler. Support de 50 chercheurs quant (migration HPC → AWS, environnements, onboarding, prod)." : "Hybrid cloud infra on AWS for quant research; Python DAG orchestrator submitting jobs to AWS and on-prem Slurm. The whirlpool = the scheduler. Supported 50 quant researchers (HPC → AWS migration, environments, onboarding, prod troubleshooting).")
+        fr ? "île aneo · cloud hybride" : "aneo island · hybrid cloud",
+        job(fr ? "2026-02 → auj." : "2026-02 → now", "Senior Consultant", fr ? "Aneo · CDI · Paris et périphérie, hybride" : "Aneo · full-time · Paris area, hybrid", fr ? "Conseil en infrastructure cloud &amp; HPC évolutive pour workloads de calcul intensif et recherche quantitative." : "Consulting on scalable cloud &amp; HPC infrastructure for compute-intensive workloads and quantitative research.") +
+          job(fr ? "mission · en cours" : "assignment · ongoing", fr ? "Agents IA &amp; automatisation" : "AI agents &amp; automation", "ABC Arbitrage", fr ? "Agents IA, workflows d'automatisation n8n." : "AI agents, n8n automation workflows.", "islet: abc-arbitrage") +
+          job(fr ? "mission" : "assignment", "ML Engineer", "ABC Arbitrage", fr ? "Plateforme AWS EKS + Ray from scratch pour l'expérimentation ML distribuée ; fondations d'un modèle CTA (trend-following) sur futures : expérimentation, évaluation." : "AWS EKS + Ray platform from scratch for distributed ML experimentation; foundations of a CTA (trend-following) model on futures: experimentation, evaluation.", "islet: abc-arbitrage") +
+          job(fr ? "mission" : "assignment", "Portfolio Platform Engineer", "Capital Fund Management (CFM)", fr ? "Infra cloud hybride AWS (EC2, S3, Lambda) pour la recherche quant ; orchestrateur de DAG en Python qui soumet chaque job sur AWS ou sur Slurm on-prem. Support de 50 chercheurs quant : migration HPC → AWS, environnements, onboarding, debug en prod." : "Hybrid AWS cloud infra (EC2, S3, Lambda) for quant research; Python DAG orchestrator submitting each job to AWS or on-prem Slurm. Supported 50 quant researchers: HPC → AWS migration, environments, onboarding, prod troubleshooting.", "islet: cfm")
       ) +
       tag("aneo", "on-prem · slurm") + tag("sky", "aws · ec2 / s3 / lambda") + tag("whirl", "scheduler", "it") + tag("cfm", "cfm · dag → aws | slurm", "small") + tag("abc2", "abc · agents · n8n", "small") + tag("abc1", "abc · eks + ray", "small") + tag("bourse", "orchestrator", "it") + tag("harbor", "job ingress · illustrative", "it")
     );
@@ -125,9 +126,9 @@ const F = {
         "dalia",
         "SHEET 04/09 · NVL72",
         "L5",
-        "dalia: NVL72",
-        job("2025-08 → 2026-01", "Sr. AI/HPC Engineer", fr ? "CNRS – IDRIS → projet européen MINERVA · CDD · Saclay" : "CNRS – IDRIS → EU project MINERVA · fixed-term · Saclay", fr ? "Tests de pré-production de Dalia — 360 PFlop/s FP16 (sparsité), 72 GPU Blackwell (36× GB200). Anneau des 72 forges = domaine NVLink, canaux de lave = trafic NVLink. + support IA Jean Zay, projets européens." : "Pre-production testing of Dalia — 360 PFlop/s FP16 (sparse), 72 Blackwell GPUs (36× GB200). Ring of 72 forges = NVLink domain, lava channels = NVLink traffic. + Jean Zay AI support, EU projects.") +
-          job("2025-12", fr ? "Chargé de cours — Master Data Science &amp; AI for Business, X-HEC" : "Lecturer — MSc Data Science &amp; AI for Business, X-HEC", fr ? "École Polytechnique · indépendant · Palaiseau" : "École Polytechnique · freelance · Palaiseau", "")
+        fr ? "île dalia · cnrs–idris" : "dalia island · cnrs–idris",
+        job("2025-08 → 2026-01", "Sr. AI/HPC Engineer", fr ? "CNRS – IDRIS → projet européen MINERVA · CDD · Saclay" : "CNRS – IDRIS → EU project MINERVA · fixed-term · Saclay", fr ? "Tests de pré-production de Dalia : NVL72, 36× GB200 (72 GPU Blackwell), 360 PFlop/s FP16 avec sparsité. En parallèle : support IA sur Jean Zay, support de projets européens sur d'autres machines." : "Pre-production testing of Dalia: NVL72, 36× GB200 (72 Blackwell GPUs), 360 PFlop/s FP16 with sparsity. In parallel: AI support on Jean Zay, support for EU projects on other machines.") +
+          job("2025-12", fr ? "Chargé de cours — Master Data Science &amp; AI for Business, X-HEC" : "Lecturer — MSc Data Science &amp; AI for Business, X-HEC", fr ? "École Polytechnique · indépendant · Palaiseau" : "École Polytechnique · freelance · Palaiseau", "", "islet: x-hec")
       ) +
       tag("volcano", "36× GB200 · 72 gpu · nvlink") + tag("xhec", "x-hec", "small")
     );
@@ -140,10 +141,10 @@ const F = {
         "jeanzay",
         "SHEET 05/09 · JEAN ZAY",
         "L4",
-        fr ? "jean zay : supercalculateur" : "jean zay: supercomputer",
-        job("2024-03 → 2025-07", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "CNRS – IDRIS · CDD · Saclay" : "CNRS – IDRIS · fixed-term · Saclay", fr ? "Support de ~3 000 utilisateurs IA &amp; HPC de Jean Zay (125 PFlop/s, 1456x NVIDIA H100) — de l'ouverture de compte au pré-entraînement et à l'affinage de LLM. Environnements IA &amp; HPC, benchmarking multi-GPU/multi-nœud, entraînement/affinage à grande échelle (BLOOM, Llama, ViT). Formateur Fidle, DLO-JZ, Panoram'IA." : "~3,000 AI &amp; HPC user support on Jean Zay (125 PFlop/s, 1456x NVIDIA H100) — account setup to LLM pre-training &amp; fine-tuning. AI &amp; HPC software stacks, multi-GPU/multi-node benchmarking, large-scale training/fine-tuning (BLOOM, Llama, ViT). AI trainer for Fidle, DLO-JZ, Panoram'IA.") +
-          job("2022-03 → 2024-02", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "Inria @ IDRIS · CDD · Saclay" : "Inria @ IDRIS · fixed-term · Saclay", fr ? "Jean Zay, génération précédente (extension A100) — 37 PFlop/s. Support IA de ~2 500 chercheurs CNRS/Inria/CEA (ML classique → pré-entraînement LLM), environnements IA/HPC, benchmarks multi-GPU/multi-nœud. 20 % StarPU (runtime Inria)." : "Jean Zay, previous generation (A100 extension) — 37 PFlop/s. AI support for ~2,500 CNRS/Inria/CEA researchers (classical ML → LLM pre-training), AI/HPC environments, multi-GPU/multi-node benchmarks. 20% StarPU (Inria runtime).") +
-          job("2022-03 → 2025-09", fr ? "Formateur — Deep Learning &amp; HPC" : "Lecturer — Deep Learning &amp; HPC", fr ? "FIDLE · à distance" : "FIDLE · remote", "")
+        fr ? "île jean zay · idris" : "jean zay island · idris",
+        job("2024-03 → 2025-07", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "CNRS – IDRIS · CDD · Saclay" : "CNRS – IDRIS · fixed-term · Saclay", fr ? "Support de ~3 000 utilisateurs IA &amp; HPC de Jean Zay (extension H100 : 1 456× H100, 125 PFlop/s), de l'ouverture de compte au pré-entraînement et au fine-tuning de LLM. Stacks logicielles IA &amp; HPC, benchmarks multi-GPU / multi-nœud, entraînement et fine-tuning à grande échelle (BLOOM, Llama, ViT). Formateur Fidle, DLO-JZ, Panoram'IA ; ateliers, hackathons, AI-DevTalks." : "Support for ~3,000 AI &amp; HPC users of Jean Zay (H100 extension: 1,456× H100, 125 PFlop/s), from account setup to LLM pre-training and fine-tuning. AI &amp; HPC software stacks, multi-GPU / multi-node benchmarks, large-scale training and fine-tuning (BLOOM, Llama, ViT). Trainer for Fidle, DLO-JZ, Panoram'IA; workshops, hackathons, AI-DevTalks.") +
+          job("2022-03 → 2024-02", fr ? "Ingénieur en intelligence artificielle" : "Artificial Intelligence Engineer", fr ? "Inria @ IDRIS · CDD · Saclay" : "Inria @ IDRIS · fixed-term · Saclay", fr ? "Jean Zay, génération précédente (extension A100, 37 PFlop/s). Support IA de ~2 500 chercheurs CNRS / Inria / CEA (ML classique → pré-entraînement de LLM), environnements IA/HPC, benchmarks multi-GPU / multi-nœud. 20 % sur StarPU (runtime à tâches d'Inria pour architectures hétérogènes)." : "Jean Zay, previous generation (A100 extension, 37 PFlop/s). AI support for ~2,500 CNRS / Inria / CEA researchers (classical ML → LLM pre-training), AI/HPC environments, multi-GPU / multi-node benchmarks. 20% on StarPU (Inria task-based runtime for heterogeneous architectures).", "islet: inria") +
+          job("2022-03 → 2025-09", fr ? "Formateur — Deep Learning &amp; HPC" : "Lecturer — Deep Learning &amp; HPC", fr ? "FIDLE · à distance" : "FIDLE · remote", "", "islet: fidle")
       ) +
       tag("jeanzay", "1456× H100 · 125 PFlop/s") + tag("newCity", "cnrs · 52×28 = 1456 gpu", "it") + tag("oldCity", fr ? "inria · gén. préc. · 37 PFlop/s" : "inria · prev gen · 37 PFlop/s", "it") + tag("citadel", "slurm ctl · illustrative", "it") +
       tag("fidle", "fidle", "small") + tag("dlojz", "dlo-jz", "small") + tag("panoramia", "panoram'ia", "small")
@@ -157,8 +158,8 @@ const F = {
         "atos",
         "SHEET 06/09 · EDGE",
         "L2",
-        fr ? "edge : inférence" : "edge: inference",
-        job("2021-02 → 2021-08", fr ? "Ingénieur IA embarquée (stage)" : "Embedded AI Engineer (intern)", "Atos, Toulouse", fr ? "Système embarqué full-stack piloté par IA, détection de défauts de surface en temps réel : YOLOv4/Faster R-CNN sur Jetson Nano, −80 % de latence (quantification &amp; élagage). Le faisceau = la boucle d'inférence." : "Full-stack AI-powered embedded system for real-time surface defect detection: YOLOv4/Faster R-CNN on Jetson Nano, −80% latency via quantization &amp; pruning. The beam = the inference loop.")
+        fr ? "île atos · inférence edge" : "atos island · edge inference",
+        job("2021-02 → 2021-08", fr ? "Ingénieur IA embarquée (stage)" : "Embedded AI Engineer (intern)", "Atos, Toulouse", fr ? "Système embarqué full-stack de détection de défauts de surface en temps réel : YOLOv4 / Faster R-CNN sur Jetson Nano, −80 % de latence (quantification, élagage)." : "Full-stack embedded system for real-time surface defect detection: YOLOv4 / Faster R-CNN on Jetson Nano, −80% latency (quantization, pruning).")
       ) + tag("atos", "jetson nano") + tag("light", "inference loop", "it") + tag("belt", "qc pipeline", "it")
     );
   },
@@ -170,19 +171,19 @@ const F = {
         "spascia",
         "SHEET 07/09 · BARE METAL",
         "L1",
-        "bare metal: 110 × arm",
-        job("2020-03 → 2020-08", fr ? "Ingénieur infrastructure (stage)" : "Infrastructure Engineer (intern)", "SPASCIA, Ramonville-Saint-Agne", fr ? "Cluster ARM-SBC 110 nœuds (440 cœurs CPU) pour RL asynchrone — OS sur mesure, automatisation, monitoring, services web. 1 cabane = 1 nœud : les 110 sont dessinés." : "110-node ARM-SBC cluster (440 CPU cores) for async RL training — custom OS, automation, monitoring, web services. 1 hut = 1 node: all 110 are drawn.")
+        fr ? "île spascia · bare metal" : "spascia island · bare metal",
+        job("2020-03 → 2020-08", fr ? "Ingénieur infrastructure (stage)" : "Infrastructure Engineer (intern)", "SPASCIA, Ramonville-Saint-Agne", fr ? "Cluster ARM-SBC de 110 nœuds (440 cœurs CPU) pour l'entraînement RL asynchrone : OS sur mesure, automatisation, monitoring, services web." : "110-node ARM-SBC cluster (440 CPU cores) for asynchronous RL training: custom OS, automation, monitoring, web services.")
       ) + tag("spascia", "110 nodes · 440 cores") + tag("chemlab", "monitoring · web services", "it")
     );
   },
   origines(l) {
     const fr = l === "fr";
     const edu = fr
-      ? [["2016–2021", "diplôme d'ingénieur (grade master) · Systèmes industriels / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "échange · Master Génie Électrique", "École de Technologie Supérieure, Montréal"], ["2020-10", "TOEIC C1 (965/990)", "obtenu"]]
-      : [["2016–2021", "engineering degree (Master's level) · Industrial Systems / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "exchange · MSc Electrical Engineering", "École de Technologie Supérieure, Montréal"], ["2020-10", "TOEIC C1 (965/990)", "obtained"]];
+      ? [["2016–2021", "diplôme d'ingénieur (grade master) · Systèmes industriels / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "échange · Master Génie Électrique", "École de Technologie Supérieure, Montréal", "islet: éts"], ["2020-10", "TOEIC C1 (965/990)", "obtenu"]]
+      : [["2016–2021", "engineering degree (Master's level) · Industrial Systems / Data Science", "INSA Centre Val de Loire, Blois"], ["2019", "exchange · MSc Electrical Engineering", "École de Technologie Supérieure, Montréal", "islet: éts"], ["2020-10", "TOEIC C1 (965/990)", "obtained"]];
     return (
       layerMark("L0 · boot") +
-      panel("origines", "SHEET 08/09 · BOOT", "L0", "init()", `<p>${fr ? "Conditions initiales : BIOS, puis le reste du système." : "Initial conditions: BIOS, then the rest of the system."}</p>` + edu.map(([a, b, c]) => job(a, b, c, "")).join("")) +
+      panel("origines", "SHEET 08/09 · BOOT", "L0", fr ? "île insa · formation" : "insa island · education", edu.map(([a, b, c, i]) => job(a, b, c, "", i)).join("")) +
       tag("port", "insa · blois") + tag("yard", "bios · init()", "it") + tag("ets", "éts · montréal", "small") + tag("forest", "rng seeds · initial conditions", "it")
     );
   },
