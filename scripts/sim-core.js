@@ -613,10 +613,17 @@ gl_FragColor=vec4(col,1.);}`;
       schedule();
       return;
     }
-    if (onScreen || ts < wakeUntil) draw();
-    else if (ts - lastHiddenDraw > 1000 / HIDDEN_FPS) {
-      lastHiddenDraw = ts;
-      draw();
+    // Une image en erreur ne doit jamais arrêter la boucle : sans ce
+    // garde-fou, la première exception figeait la page pour toujours
+    // (aperçu miroir réduit aux cartouches, sans îles ni animation).
+    try {
+      if (onScreen || ts < wakeUntil) draw();
+      else if (ts - lastHiddenDraw > 1000 / HIDDEN_FPS) {
+        lastHiddenDraw = ts;
+        draw();
+      }
+    } catch (e) {
+      console.warn(e);
     }
     schedule();
   }
@@ -664,7 +671,22 @@ gl_FragColor=vec4(col,1.);}`;
     if (ctx) draw();
   };
 
+  // Largeur minimale pour construire la carte. L'iframe miroir peut être
+  // chargée alors qu'elle mesure encore 0 px (page parente pas encore
+  // dimensionnée, onglet en arrière-plan) : la mise en page produisait
+  // alors des tailles négatives et cassait la carte sans jamais s'en
+  // remettre. On attend simplement le premier resize valable.
+  const MIN_W = 200;
   SIM.start = function () {
+    if (window.innerWidth < MIN_W) {
+      const retry = () => {
+        if (window.innerWidth < MIN_W) return;
+        window.removeEventListener("resize", retry);
+        SIM.start();
+      };
+      window.addEventListener("resize", retry);
+      return;
+    }
     sea = document.getElementById("sea");
     fx = document.getElementById("fx");
     if (!fx) return;
@@ -705,6 +727,7 @@ gl_FragColor=vec4(col,1.);}`;
     schedule();
     let lastW = window.innerWidth;
     window.addEventListener("resize", () => {
+      if (window.innerWidth < MIN_W) return; // cf. MIN_W
       sizeCanvas();
       if (window.innerWidth !== lastW) {
         lastW = window.innerWidth;
