@@ -1,0 +1,13 @@
+#!/bin/sh
+# Refuse un commit si les fichiers partagés divergent du dépôt frère
+# (cf. tools/shared.mjs). Activation, une fois par clone :
+#   git config core.hooksPath tools/hooks
+# Dépôt frère absent (clone isolé) : contrôle sauté.
+root=$(git rev-parse --show-toplevel)
+case "$(basename "$root")" in
+  hunoutl.gitlab.io) sib="$root/../hunoutl.github.io" ;;
+  hunoutl.github.io) sib="$root/../hunoutl.gitlab.io" ;;
+  *) exit 0 ;;
+esac
+[ -d "$sib/scripts" ] || exit 0
+exec node "$root/tools/shared.mjs" check "$sib"

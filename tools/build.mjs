@@ -11,7 +11,7 @@
 // Usage : node tools/build.mjs (lancé par la CI avant déploiement)
 // Test en réseau local : MIRROR_URL=http://<ip-ou-nom>:<port>/ node tools/build.mjs
 // (URL de base du site miroir, slash final ; par défaut la production
-// codée dans drag-swipe.js.) Ajouter ?debug=1 pour le panneau de mesures.
+// codée dans scripts/site.js.) Ajouter ?debug=1 pour le panneau de mesures.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,10 +32,10 @@ function transformScript(path, code) {
   if (path.endsWith("content.js")) {
     code = code.replace(/assets\/[\w.-]+\.(webp|png|jpg|svg)/g, (asset) => dataUri(asset));
   }
-  if (path.endsWith("drag-swipe.js") && mirrorUrl) {
-    const re = /const MIRROR_URL = "[^"]*";/;
-    if (!re.test(code)) throw new Error("MIRROR_URL introuvable dans drag-swipe.js");
-    code = code.replace(re, `const MIRROR_URL = ${JSON.stringify(mirrorUrl)};`);
+  if (path.endsWith("site.js") && mirrorUrl) {
+    const re = /mirrorUrl: "[^"]*",/;
+    if (!re.test(code)) throw new Error("mirrorUrl introuvable dans site.js");
+    code = code.replace(re, `mirrorUrl: ${JSON.stringify(mirrorUrl)},`);
   }
   // Rien dans le code inliné ne doit pouvoir fermer la balise ou ouvrir un
   // commentaire HTML (qui changerait le mode d'analyse du <script>).

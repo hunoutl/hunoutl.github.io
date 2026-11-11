@@ -1,7 +1,7 @@
 // Bascule FR/EN locale (même page, pas de navigation) : petit fondu
 // sur le contenu pendant le remplacement, pas de dépendance à
 // l'ancien overlay plein écran (supprimé avec l'architecture iframe).
-const DEFAULT_LANG = "en";
+const DEFAULT_LANG = window.SITE.defaultLang; // cf. site.js
 const STORAGE_KEY = "siteLang";
 
 const LANGS = ["fr", "en"];
@@ -71,14 +71,14 @@ function renderFloors(lang) {
 function updateLangButton() {
   const btn = document.getElementById("lang-switch");
   if (!btn) return;
-  btn.textContent = currentLang === "en" ? "FR" : "EN";
+  btn.textContent = currentLang === "fr" ? "EN" : "FR";
   // Le nom accessible contient le texte visible (WCAG 2.5.3).
-  btn.setAttribute("aria-label", currentLang === "en" ? "FR — version française" : "EN — English version");
-  btn.lang = currentLang === "en" ? "fr" : "en";
+  btn.setAttribute("aria-label", currentLang === "fr" ? "EN — English version" : "FR — version française");
+  btn.lang = currentLang === "fr" ? "en" : "fr";
 }
 
-// Machine → Façade : la carte se redéplie par-dessus le plan.
-const MIRROR_HINT_LABEL = { fr: "← La carte", en: "← The map" };
+// Libellé du lien vers l'autre face (cf. site.js).
+const MIRROR_HINT_LABEL = window.SITE.mirrorHint;
 
 function updateMirrorHint() {
   const link = document.getElementById("mirror-hint");
@@ -88,7 +88,7 @@ function updateMirrorHint() {
 
 function toggleLanguage() {
   const container = document.getElementById("floors");
-  const nextLang = currentLang === "en" ? "fr" : "en";
+  const nextLang = currentLang === "fr" ? "en" : "fr";
   container.classList.add("lang-fading");
   window.setTimeout(() => {
     currentLang = nextLang;

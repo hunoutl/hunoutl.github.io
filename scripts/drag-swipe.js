@@ -1,18 +1,18 @@
 // Glissement horizontal → bascule vers le site miroir, sur l'étage
-// équivalent. Même fichier sur les deux sites, seuls MIRROR_URL
-// et NEIGHBOR_DIRECTION changent.
+// équivalent. Même fichier sur les deux sites : ce qui diffère
+// (URL de l'autre face, sens du glissement) vient de site.js.
 //
 // Principe anti-flash : un iframe caché du site miroir est préchargé
-// et gardé synchronisé (scroll) en continu. Pendant le drag, on fait
+// (à la première intention du visiteur, cf. armMirror) et gardé
+// synchronisé (scroll) en continu. Pendant le drag, on fait
 // glisser CE VRAI RENDU du miroir à l'écran (pas une simple couleur/
 // overlay) — zéro flash puisque rien ne recharge pendant le geste.
 // La navigation réelle (changement de domaine dans la barre d'adresse)
 // n'est déclenchée qu'une fois l'iframe déjà en pleine couverture de
 // l'écran, donc invisible pour l'essentiel du ressenti.
 (function () {
-  // URL de base du site miroir (avec slash final). tools/build.mjs peut
-  // réécrire cette ligne (MIRROR_URL=...) pour les tests en réseau local.
-  const MIRROR_URL = "https://hunoutl.gitlab.io/";
+  // URL de base du site miroir (avec slash final), cf. site.js.
+  const MIRROR_URL = window.SITE.mirrorUrl;
   const MIRROR_ORIGIN = new URL(MIRROR_URL).origin;
   // Payload d'arrivée "<scrollY>.<lang>.<flags>.<innerHeight>.<tick figé>"
   // (dernier champ vide si la simulation tourne), transmis de deux façons :
@@ -30,10 +30,9 @@
   const SPEC_RULES = !!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"));
   const FLAG_USER_ACTIVATION = 1;
   const FLAG_DEBUG = 2;
-  // Convention "carrousel" : le voisin de gauche (ici Façade) se révèle
-  // en glissant vers la DROITE (comme revenir en arrière dans une galerie).
-  // +1 = voisin à droite, -1 = voisin à gauche (cf. version gitlab.io).
-  const NEIGHBOR_DIRECTION = -1;
+  // Convention "carrousel" : +1 = voisin à droite, révélé en glissant vers
+  // la gauche ; -1 = voisin à gauche, révélé en glissant vers la droite.
+  const NEIGHBOR_DIRECTION = window.SITE.neighborDirection;
   const DRAG_THRESHOLD_RATIO = 0.22; // fraction de la largeur d'écran
   const SETTLE_MS = 260;
   // --- Geste rapide (v5) -------------------------------------------------
@@ -573,6 +572,7 @@
   // --- Souris : Pointer Events ---
   function onPointerDown(e) {
     if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
+    armMirror();
     // Nouveau contact : le clic éventuel d'un geste précédent est passé
     // (sinon un swipe tactile, qui ne produit pas de clic, laissait le
     // drapeau levé et avalait le tap suivant, ex. sur le bouton de langue).
@@ -621,6 +621,7 @@
   function onTouchStart(e) {
     if (dragging) return; // un doigt déjà suivi
     hadDragMotion = false; // cf. onPointerDown
+    armMirror();
     wakeMirror();
     if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
     const t = e.touches[0];
@@ -657,7 +658,7 @@
     abortDrag();
   }
 
-  // Le lien de secours (ex. "Back to the map") n'est PAS imbriqué
+  // Le lien de secours (lien d'en-tête vers l'autre face) n'est PAS imbriqué
   // dans un étage : son href doit suivre l'étage courant en continu,
   // pas être figé une fois pour toutes sur "hero" au chargement.
   function updateFallbackLinks() {
@@ -717,6 +718,74 @@
       if (!dragging && !committed) placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
       syncMirrorFrameScroll();
     });
+  }
+
+  // --- Aperçu miroir chargé à la première intention ---------------------
+  // L'iframe (une deuxième page complète, deux contextes WebGL, ~120 Mo)
+  // et le préchargement de l'autre face ne servent qu'à qui va glisser.
+  // Les créer dès l'ouverture doublait le poids de chaque visite et
+  // disputait le processeur au démarrage de la page. On attend donc un
+  // premier signe d'activité : doigt posé, défilement, molette, clavier,
+  // souris qui bouge, focus ou survol du lien vers l'autre face. Le
+  // défilement de lecture précède presque toujours le premier swipe :
+  // l'aperçu a le temps d'être prêt (cf. mirrorFrameReady).
+  // Filet : ARM_IDLE_MS après le chargement sans aucune interaction (un
+  // visiteur qui lit l'accueil puis glisse directement).
+  // Data saver ou réseau très lent : seulement sur un geste explicite
+  // (doigt posé, clic, lien) ; le tout premier geste peut alors ne rien
+  // faire, le temps que l'aperçu charge.
+  const ARM_IDLE_MS = 5000;
+  const ARM_EVENTS = ["scroll", "wheel", "keydown", "mousemove", "focusin"];
+  let mirrorArmed = false;
+  let armTimer = 0;
+
+  function frugalNetwork() {
+    const c = navigator.connection;
+    return !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || "")));
+  }
+
+  function armMirror() {
+    if (mirrorArmed || isEmbedded || reduceMotion) return;
+    mirrorArmed = true;
+    window.clearTimeout(armTimer);
+    for (const t of ARM_EVENTS) window.removeEventListener(t, onArmEvent, true);
+    debugLog("aperçu miroir : création (première intention)");
+    addPrefetchRule();
+    createMirrorFrame();
+  }
+
+  let firstMouse = null;
+  function onArmEvent(e) {
+    // focus/survol : seulement le lien vers l'autre face (intention claire)
+    if (e.type === "focusin" && !e.target.closest("[data-mirror-link]")) return;
+    if (e.type === "mousemove") {
+      if (frugalNetwork() && !e.target.closest("[data-mirror-link]")) return;
+      // Chrome émet un mousemove synthétique au chargement, sous un curseur
+      // immobile : seul un vrai déplacement compte.
+      if (!firstMouse) {
+        firstMouse = [e.screenX, e.screenY];
+        return;
+      }
+      if (Math.abs(e.screenX - firstMouse[0]) + Math.abs(e.screenY - firstMouse[1]) < 8) return;
+    }
+    armMirror();
+  }
+
+  function scheduleArm(arrival) {
+    // Arrivée par swipe : le visiteur sait glisser, il reviendra sans doute.
+    if (arrival) return armMirror();
+    if (frugalNetwork()) {
+      // seuls les gestes explicites (pointerdown/touchstart) et le lien arment
+      window.addEventListener("focusin", onArmEvent, true);
+      window.addEventListener("mousemove", onArmEvent, true);
+      return;
+    }
+    for (const t of ARM_EVENTS) window.addEventListener(t, onArmEvent, { capture: true, passive: true });
+    const idle = () => {
+      armTimer = window.setTimeout(armMirror, ARM_IDLE_MS);
+    };
+    if (document.readyState === "complete") idle();
+    else window.addEventListener("load", idle, { once: true });
   }
 
   function listenForSync() {
@@ -844,8 +913,7 @@
       return; // pas de drag élastique, seulement les liens de secours
     }
 
-    addPrefetchRule();
-    createMirrorFrame();
+    scheduleArm(arrival);
 
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointermove", onPointerMove);
@@ -877,7 +945,7 @@
       true
     );
 
-    // Le lien de secours ("Back to the map"...) déclenche la même
+    // Le lien de secours (lien d'en-tête vers l'autre face) déclenche la même
     // animation de bascule qu'un drag mené jusqu'au bout à la main,
     // plutôt qu'un saut d'ancre natif instantané.
     document.addEventListener("click", (e) => {
@@ -887,6 +955,9 @@
       if (committed) return; // déjà en route (double clic)
       dragging = false;
       committed = true;
+      // Aperçu pas encore prêt (clic juste après l'ouverture, réseau
+      // économe) : rien à révéler, on part tout de suite.
+      if (!mirrorFrameReady) return goToMirrorReal();
       settleCommitted(BUTTON_SETTLE_MS);
     });
   }
