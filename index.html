@@ -6,31 +6,41 @@
   <!-- Couleur du canevas par défaut AVANT tout CSS : le premier frame peint
        après la navigation cross-site n'est jamais blanc par défaut. -->
   <meta name="color-scheme" content="dark" />
-  <title>hunoutl — AI/HPC Engineer</title>
-  <meta name="description" content="Léo Hunout, AI/HPC infrastructure engineer. Swipe right for the plain-language version." />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <title>hunoutl</title>
+  <meta name="description" content="Léo Hunout, AI/HPC infrastructure engineer. The unrendered skeleton of the same map, and the computation under it — swipe right for the map." />
   <meta property="og:title" content="hunoutl — AI/HPC Engineer" />
-  <meta property="og:description" content="4+ years building large-scale AI/HPC compute infrastructure." />
+  <meta property="og:description" content="5+ years building large-scale AI/HPC compute infrastructure." />
   <link rel="stylesheet" href="styles/machine.css" />
   <style>
-    html { background: #0b0e0c; }
+    html { background: #020604; }
   </style>
   <!-- Bloque le premier rendu jusqu'à ce que #render-ready (après les
        scripts, en fin de body) soit parsé : le premier frame peint contient
-       donc déjà le contenu rendu par JS et la position de scroll d'arrivée.
-       Chromium 124+ ; ignoré ailleurs. -->
+       donc déjà le contenu, la simulation dessinée et la position de scroll
+       d'arrivée. Chromium 124+ ; ignoré ailleurs. -->
   <link rel="expect" href="#render-ready" blocking="render" />
 </head>
 <body>
+  <canvas id="sea" aria-hidden="true"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div id="clouds" aria-hidden="true"></div>
   <header class="site-bar">
     <button id="lang-switch" class="lang-switch" type="button">FR</button>
-    <a id="mirror-hint" class="mirror-hint" data-mirror-link href="#" data-floor-id="hero"></a>
+    <span class="brand">hunoutl</span>
+    <a id="mirror-hint" class="mirror-hint" data-mirror-link href="#"></a>
   </header>
 
   <main id="floors"></main>
 
+  <script src="scripts/geo.js"></script>
   <script src="scripts/content.js"></script>
   <script src="scripts/lang-switch.js"></script>
+  <script src="scripts/sim-core.js"></script>
+  <script src="scripts/render-machine.js"></script>
   <script src="scripts/drag-swipe.js"></script>
+  <script>SIM.start();</script>
   <div id="render-ready" hidden></div>
 </body>
 </html>

@@ -39,10 +39,35 @@
   const NEIGHBOR_DIRECTION = -1;
   const DRAG_THRESHOLD_RATIO = 0.22; // fraction de la largeur d'écran
   const SETTLE_MS = 260;
+  // --- Geste rapide (v5) -------------------------------------------------
+  // Un seuil en distance seul annulait les gestes rapides mais courts, et
+  // une fin d'animation à durée/courbe fixes faisait freiner (ou bondir)
+  // la page au lâcher. On mesure donc la vitesse du doigt au lâcher :
+  //  - un coup sec vers le voisin (vitesse > FLICK_MIN_SPEED, distance >
+  //    FLICK_MIN_RATIO de la largeur) suffit à basculer ; un coup sec dans
+  //    l'autre sens annule, même au-delà du seuil de distance ;
+  //  - la fin d'animation PART À LA VITESSE DU DOIGT (cf. settleCurve) et
+  //    arrive à vitesse nulle : aucune rupture de vitesse.
+  const FLICK_WINDOW_MS = 80; // vitesse mesurée sur les ~80 dernières ms du geste
+  const FLICK_MIN_SPEED = 0.4; // px/ms (400 px/s)
+  const FLICK_MIN_RATIO = 0.06; // fraction de la largeur d'écran
+  const SETTLE_MIN_MS = 160;
+  const SETTLE_MAX_MS = 440;
   // Le clic sur le bouton n'a pas le retour tactile immédiat d'un
   // vrai geste de drag : une bascule instantanée y paraît plus abrupte,
   // donc on lui laisse une animation un peu plus longue.
   const BUTTON_SETTLE_MS = 420;
+  // Habillage de la bascule (proposition "cartographie") : en mode "scan",
+  // la page courante NE BOUGE PAS ; l'iframe miroir est révélé sur place,
+  // derrière une ligne de balayage qui suit le doigt — comme une
+  // radiographie passée sur la carte (les deux faces partagent la même
+  // géographie au pixel près). Mécanique identique au mode "slide"
+  // d'origine : seuls les transforms appliqués diffèrent. Fenêtre
+  // (#mirror-window, overflow:hidden) translatée de +x, iframe
+  // contre-translaté de -x : le contenu miroir reste immobile à l'écran,
+  // tout est composité (aucun clip-path animé). Même état final que
+  // "slide" (tout à 0) au moment de la navigation.
+  const REVEAL = "scan"; // "slide" = comportement d'origine
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isEmbedded = window.self !== window.top;
 
@@ -66,7 +91,31 @@
   let currentDx = 0;
   let pointerId = null;
   let mirrorFrame = null;
+  let mirrorWindow = null; // mode "scan" : fenêtre qui contient l'iframe
+  let scanLine = null; // mode "scan" : ligne de balayage (bord de la fenêtre)
   let mirrorFrameReady = false;
+
+  // Place les calques du miroir. offset = décalage de la fenêtre (0 =
+  // couverture totale, NEIGHBOR_DIRECTION * largeur = repos hors champ).
+  function placeMirror(offset, ms, ease) {
+    if (!mirrorFrame) return;
+    const tr = ms ? `transform ${ms}ms ${ease || "cubic-bezier(0.22, 1, 0.36, 1)"}` : "none";
+    if (REVEAL === "scan" && mirrorWindow) {
+      mirrorWindow.style.transition = tr;
+      mirrorWindow.style.transform = `translateX(${offset}px)`;
+      mirrorFrame.style.transition = tr;
+      mirrorFrame.style.transform = `translateX(${-offset}px)`;
+      if (scanLine) {
+        // voisin à gauche : la ligne est accrochée au bord DROIT de la fenêtre
+        if (NEIGHBOR_DIRECTION < 0) scanLine.style.left = `${window.innerWidth}px`;
+        scanLine.style.transition = tr;
+        scanLine.style.transform = `translateX(${offset}px)`;
+      }
+    } else {
+      mirrorFrame.style.transition = tr;
+      mirrorFrame.style.transform = `translateX(${offset}px)`;
+    }
+  }
 
   function currentFloorFromScroll() {
     let best = floors[0];
@@ -258,15 +307,17 @@
     const w = window.innerWidth;
     const clampedDx = Math.max(-w, Math.min(w, dx));
     // contenu courant : suit le doigt, jusqu'à sortir complètement.
-    document.documentElement.style.setProperty("--drag-x", `${clampedDx}px`);
+    // En mode "scan" la page ne bouge pas et personne ne lit --drag-x :
+    // l'écrire sur :root à chaque touchmove forçait un recalcul de style
+    // de TOUT le document (milliers de nœuds SVG) pendant le geste (v5).
+    if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", `${clampedDx}px`);
     // iframe miroir : commence hors-champ (NEIGHBOR_DIRECTION * w) et
     // glisse vers 0 au même rythme que le doigt, sans jamais dépasser 0.
     if (mirrorFrame) {
       const restOffset = NEIGHBOR_DIRECTION * w;
       const raw = restOffset + clampedDx;
       const frameOffset = restOffset >= 0 ? Math.max(0, Math.min(restOffset, raw)) : Math.min(0, Math.max(restOffset, raw));
-      mirrorFrame.style.transition = "none";
-      mirrorFrame.style.transform = `translateX(${frameOffset}px)`;
+      placeMirror(frameOffset, 0);
     }
   }
 
@@ -286,28 +337,81 @@
     }
   }
 
-  function settleCommitted(durationMs) {
-    const ms = durationMs || SETTLE_MS;
+  // Fin d'animation qui prolonge le geste (v5). remaining = distance
+  // restante (px), speed = vitesse du doigt VERS la cible au lâcher (px/ms).
+  // Profil = décélération constante : y(u) = s·u − (s−1)·u² … exactement une
+  // cubic-bezier(1/3, s/3, 2/3, 1) (élévation de degré d'une quadratique),
+  // de pente initiale s (normalisée) et de pente finale nulle. On choisit
+  // la durée pour que s = 2 (T = 2·D/v : la page part à la vitesse du doigt
+  // et s'arrête pile sur la cible), bornée à [SETTLE_MIN_MS, SETTLE_MAX_MS] ;
+  // si la borne s'applique, s = v·T/D garde la vitesse initiale exacte.
+  // s ≤ 3 : y1 ≤ 1, la courbe ne dépasse jamais la cible ; au-delà (coup
+  // très sec, peu de distance restante) on prend x1 = 1/s, y1 = 1, même
+  // pente initiale et toujours sans dépassement.
+  function settleCurve(remaining, speed) {
+    const D = Math.max(1, remaining);
+    const v = Math.max(0, speed);
+    const ms = Math.round(Math.max(SETTLE_MIN_MS, Math.min(SETTLE_MAX_MS, v > 0 ? (2 * D) / v : SETTLE_MAX_MS)));
+    const s = (v * ms) / D;
+    const r = (n) => Math.round(n * 1000) / 1000;
+    const ease = s <= 3 ? `cubic-bezier(0.333, ${r(s / 3)}, 0.667, 1)` : `cubic-bezier(${r(1 / s)}, 1, 0.667, 1)`;
+    return { ms, ease };
+  }
+
+  // speed (facultatif) : vitesse du doigt vers le voisin au lâcher (px/ms).
+  // Sans vitesse (lien de secours, durée imposée) : courbe d'origine.
+  function settleCommitted(durationMs, speed) {
     const w = window.innerWidth;
-    document.body.classList.add("settling");
-    document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
-    if (mirrorFrame) {
-      mirrorFrame.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-      mirrorFrame.style.transform = "translateX(0px)";
+    let ms = durationMs || SETTLE_MS;
+    let ease = null;
+    if (speed != null) {
+      const c = settleCurve(w - Math.max(0, progressTowardNeighbor(currentDx)), speed);
+      ms = c.ms;
+      ease = c.ease;
     }
+    document.body.classList.add("settling");
+    if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", `${NEIGHBOR_DIRECTION * w}px`);
+    placeMirror(0, ms, ease);
     window.setTimeout(goToMirrorReal, ms);
   }
 
-  function settleCancelled() {
-    document.body.classList.add("settling");
-    document.documentElement.style.setProperty("--drag-x", "0px");
-    if (mirrorFrame) {
-      mirrorFrame.style.transition = `transform ${SETTLE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+  // speed (facultatif) : vitesse du doigt vers le voisin au lâcher (px/ms) ;
+  // le retour part à cette vitesse si le doigt revenait déjà en arrière.
+  function settleCancelled(speed) {
+    let ms = SETTLE_MS;
+    let ease = null;
+    const back = Math.max(0, progressTowardNeighbor(currentDx));
+    if (speed != null && back > 0) {
+      const c = settleCurve(back, -speed);
+      ms = c.ms;
+      ease = c.ease;
     }
+    document.body.classList.add("settling");
+    if (REVEAL !== "scan") document.documentElement.style.setProperty("--drag-x", "0px");
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, ms, ease);
     window.setTimeout(() => {
       document.body.classList.remove("settling");
-    }, SETTLE_MS);
+    }, ms);
+  }
+
+  // Échantillons [t, dx] du geste, pour la vitesse de lâcher (v5).
+  const samples = [];
+  function trackSample(t, dx) {
+    samples.push([t, dx]);
+    // on garde un peu plus que la fenêtre de mesure
+    while (samples.length > 2 && t - samples[0][0] > FLICK_WINDOW_MS * 2) samples.shift();
+  }
+  // Vitesse (px/ms, signe de dx) sur les FLICK_WINDOW_MS dernières ms.
+  // Doigt immobile avant de lever (dernier échantillon trop ancien) : 0.
+  function releaseVelocity(now) {
+    const n = samples.length;
+    if (n < 2) return 0;
+    const [t1, x1] = samples[n - 1];
+    if (now - t1 > FLICK_WINDOW_MS) return 0;
+    let i = n - 2;
+    while (i > 0 && t1 - samples[i - 1][0] <= FLICK_WINDOW_MS) i--;
+    const [t0, x0] = samples[i];
+    return t1 - t0 >= 8 ? (x1 - x0) / (t1 - t0) : 0;
   }
 
   // Sur les vrais éléments de texte, on laisse le navigateur gérer la
@@ -378,6 +482,7 @@
     startX = clientX;
     startY = clientY;
     currentDx = 0;
+    samples.length = 0;
     document.body.classList.remove("settling");
   }
 
@@ -411,6 +516,7 @@
     }
 
     currentDx = dx;
+    trackSample(evt && evt.timeStamp ? evt.timeStamp : performance.now(), dx);
     if (Math.abs(currentDx) > DRAG_MOTION_PX) hadDragMotion = true;
     if (evt) evt.preventDefault();
     if (progressTowardNeighbor(currentDx) > 0) {
@@ -424,12 +530,17 @@
     if (!dragging) return;
     dragging = false;
     document.body.classList.remove("dragging");
-    const threshold = window.innerWidth * DRAG_THRESHOLD_RATIO;
-    if (intentResolved && progressTowardNeighbor(currentDx) > threshold) {
+    const w = window.innerWidth;
+    const progress = progressTowardNeighbor(currentDx);
+    // vitesse vers le voisin au lâcher (> 0 : le doigt allait vers lui)
+    const speed = progressTowardNeighbor(releaseVelocity(performance.now()));
+    const flick = speed > FLICK_MIN_SPEED && progress > w * FLICK_MIN_RATIO;
+    const flickBack = speed < -FLICK_MIN_SPEED;
+    if (intentResolved && (flick || (progress > w * DRAG_THRESHOLD_RATIO && !flickBack))) {
       committed = true;
-      settleCommitted();
+      settleCommitted(0, speed);
     } else {
-      settleCancelled();
+      settleCancelled(intentResolved ? speed : null);
     }
     currentDx = 0;
   }
@@ -440,11 +551,26 @@
     settleCancelled();
   }
 
+  // Réveille l'iframe miroir à pleine cadence dès le premier contact
+  // (avant même que l'intention horizontale soit tranchée) : hors champ,
+  // elle ne dessine qu'à 6 i/s ; sans ce réveil anticipé, les premiers
+  // frames révélés sous le doigt seraient en retard (proposition archipel).
+  function wakeMirror() {
+    if (mirrorFrame && mirrorFrame.contentWindow) {
+      try {
+        mirrorFrame.contentWindow.postMessage({ type: "wake" }, MIRROR_ORIGIN);
+      } catch (err) {
+        /* iframe pas encore navigable */
+      }
+    }
+  }
+
   // --- Souris : Pointer Events ---
   function onPointerDown(e) {
     if (e.pointerType === "touch") return; // le tactile passe par les Touch Events, cf. plus haut
     if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest(FULL_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
+    wakeMirror();
     // Tant que l'iframe miroir n'a pas fini de charger (CSS + son propre JS,
     // qui remplit par ex. le texte du bouton de bascule), la faire glisser
     // à l'écran révèlerait une page à moitié initialisée — constaté comme
@@ -469,6 +595,7 @@
   // --- Tactile : Touch Events ---
   function onTouchStart(e) {
     if (dragging) return; // un doigt déjà suivi
+    wakeMirror();
     if (!mirrorFrameReady) return; // cf. commentaire dans onPointerDown
     const t = e.touches[0];
     if (e.target.closest(TOUCH_TEXT_SELECTOR)) return; // laisser le navigateur gérer ces éléments
@@ -504,7 +631,7 @@
     abortDrag();
   }
 
-  // Le lien de secours (ex. "plain-language version") n'est PAS imbriqué
+  // Le lien de secours (ex. "Back to the map") n'est PAS imbriqué
   // dans un étage : son href doit suivre l'étage courant en continu,
   // pas être figé une fois pour toutes sur "hero" au chargement.
   function updateFallbackLinks() {
@@ -527,23 +654,40 @@
     // cible visible sur un bord.
     iframe.style.width = `${window.innerWidth}px`;
     iframe.style.height = `${window.innerHeight}px`;
-    iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
     iframe.addEventListener("load", () => {
       mirrorFrameReady = true;
       syncMirrorFrameScroll();
     });
-    document.body.appendChild(iframe);
     mirrorFrame = iframe;
+    if (REVEAL === "scan") {
+      mirrorWindow = document.createElement("div");
+      mirrorWindow.id = "mirror-window";
+      mirrorWindow.setAttribute("aria-hidden", "true");
+      mirrorWindow.style.width = `${window.innerWidth}px`;
+      mirrorWindow.style.height = `${window.innerHeight}px`;
+      mirrorWindow.appendChild(iframe);
+      scanLine = document.createElement("div");
+      scanLine.id = "scan-line";
+      scanLine.className = NEIGHBOR_DIRECTION > 0 ? "from-right" : "from-left";
+      scanLine.setAttribute("aria-hidden", "true");
+      scanLine.innerHTML = '<span class="scan-tab"></span>';
+      document.body.appendChild(mirrorWindow);
+      document.body.appendChild(scanLine);
+    } else {
+      document.body.appendChild(iframe);
+    }
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
     // La barre d'adresse mobile qui se replie/réapparaît change
     // innerHeight : l'iframe doit suivre, sinon elle ne couvre plus tout
     // l'écran (ou déborde) au moment de la bascule.
     window.addEventListener("resize", () => {
       iframe.style.width = `${window.innerWidth}px`;
       iframe.style.height = `${window.innerHeight}px`;
-      if (!dragging && !committed) {
-        iframe.style.transition = "none";
-        iframe.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
+      if (mirrorWindow) {
+        mirrorWindow.style.width = `${window.innerWidth}px`;
+        mirrorWindow.style.height = `${window.innerHeight}px`;
       }
+      if (!dragging && !committed) placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
       syncMirrorFrameScroll();
     });
   }
@@ -553,6 +697,15 @@
       if (e.origin !== MIRROR_ORIGIN) return;
       const data = e.data;
       if (!data) return;
+      if (data.type === "mirror-ready" && e.source === (mirrorFrame && mirrorFrame.contentWindow)) {
+        // premier rendu complet de l'iframe (contenu + simulation) : le
+        // drag est permis sans attendre l'événement load
+        if (!mirrorFrameReady) {
+          mirrorFrameReady = true;
+          syncMirrorFrameScroll();
+        }
+        return;
+      }
       if (data.type !== "sync-scroll") return;
       syncIncomingLang(data.lang);
       if (typeof data.vh === "number" && data.vh > 0) {
@@ -624,10 +777,7 @@
     document.body.classList.remove("settling", "dragging");
     document.body.classList.add("no-anim");
     document.documentElement.style.setProperty("--drag-x", "0px");
-    if (mirrorFrame) {
-      mirrorFrame.style.transition = "none";
-      mirrorFrame.style.transform = `translateX(${NEIGHBOR_DIRECTION * window.innerWidth}px)`;
-    }
+    placeMirror(NEIGHBOR_DIRECTION * window.innerWidth, 0);
   }
 
   function init() {
@@ -690,7 +840,7 @@
       true
     );
 
-    // Le lien de secours ("plain-language version"...) déclenche la même
+    // Le lien de secours ("Back to the map"...) déclenche la même
     // animation de bascule qu'un drag mené jusqu'au bout à la main,
     // plutôt qu'un saut d'ancre natif instantané.
     document.addEventListener("click", (e) => {
