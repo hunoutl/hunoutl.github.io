@@ -23,7 +23,7 @@
     { id: "atos", d: 1000, m: 1280, hour: 4 },
     { id: "spascia", d: 980, m: 1250, hour: 5 },
     { id: "origines", d: 1100, m: 1450, hour: 6 },
-    { id: "contact", d: 900, m: 1050, hour: 7 },
+    { id: "contact", d: 900, m: 880, hour: 7 },
   ];
   const IDS = FLOORS.map((f) => f.id);
 
@@ -128,6 +128,106 @@
         blocks.push([x, y, i, j, type]);
       }
     return { sp, ang, blocks, core };
+  }
+
+  // Intervalles [x0, x1] où l'horizontale y coupe le polygone pts.
+  function spans(pts, y, out) {
+    const xs = [];
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const a = pts[i], b = pts[(i + 1) % n];
+      if ((a[1] <= y) !== (b[1] <= y)) xs.push(a[0] + ((y - a[1]) / (b[1] - a[1])) * (b[0] - a[0]));
+    }
+    xs.sort((p, q) => p - q);
+    for (let i = 0; i + 1 < xs.length; i += 2) out.push([xs[i], xs[i + 1]]);
+  }
+
+  // Route du voilier sans traverser d'île : programmation dynamique sur une
+  // grille (y tous les DY px, x discrétisé). Coût = virage (pente²) +
+  // écart à la route d'intention (points posés à la main) + énorme pénalité
+  // sur l'eau trop proche d'une côte. La route reste une fonction de y
+  // (le voilier descend toujours), lisse, et identique des deux côtés
+  // puisqu'elle ne dépend que de la mise en page.
+  function clearRoute(L, y0) {
+    const W = L.W;
+    const m = L.m;
+    const DY = 24;
+    const DX = m ? 4 : 8;
+    const C = m ? Math.min(20, W * 0.05) : 34; // distance minimale à la côte (le voilier fait ~40 px)
+    const mg = m ? Math.min(20, W * 0.04) : 40;
+    const yEnd = L.dock.y;
+    const xEnd = L.route[L.route.length - 1][0];
+    const obs = L.isles.concat(L.annex).map((o) => {
+      const top = L.byId[o.floor].top;
+      let y1 = Infinity, y2 = -Infinity;
+      for (const p of o.pts) {
+        y1 = Math.min(y1, p[1]);
+        y2 = Math.max(y2, p[1]);
+      }
+      const c = o.kind === "rock" ? C * 0.8 : C;
+      return { pts: o.pts, top, y1: top + y1 - c, y2: top + y2 + c, c };
+    });
+    const nx = Math.floor((W - 2 * mg) / DX) + 1;
+    const rows = [];
+    for (let y = y0; y < yEnd; y += DY) rows.push(y);
+    rows.push(yEnd);
+    const nr = rows.length;
+    // cases bloquées : côte élargie de c (trois horizontales + marge en x)
+    const blocked = rows.map((y) => {
+      const b = new Uint8Array(nx);
+      if (yEnd - y < 60) return b; // approche finale : le quai lui-même
+      const sp = [];
+      for (const o of obs) {
+        if (y < o.y1 || y > o.y2) continue;
+        const s0 = [];
+        for (const d of [-o.c, -o.c / 2, 0, o.c / 2, o.c]) spans(o.pts, y - o.top + d, s0);
+        for (const [a, b2] of s0) sp.push([a - o.c, b2 + o.c]);
+      }
+      for (const [a, b2] of sp) {
+        const i0 = Math.max(0, Math.ceil((a - mg) / DX));
+        const i1 = Math.min(nx - 1, Math.floor((b2 - mg) / DX));
+        for (let i = i0; i <= i1; i++) b[i] = 1;
+      }
+      return b;
+    });
+    const reach = Math.max(1, Math.round((DY * 1.1) / DX)); // pente max ≈ 48°
+    const cost = new Float64Array(nr * nx).fill(Infinity);
+    const from = new Int32Array(nr * nx);
+    const xi = (x) => Math.max(0, Math.min(nx - 1, Math.round((x - mg) / DX)));
+    const s0 = xi(routeX(L, y0));
+    cost[s0] = 0;
+    const wT = 1 / ((W * 0.3) * (W * 0.3));
+    for (let r = 1; r < nr; r++) {
+      const tx = routeX(L, rows[r]);
+      const dyr = rows[r] - rows[r - 1];
+      for (let i = 0; i < nx; i++) {
+        const x = mg + i * DX;
+        const here = (blocked[r][i] ? 1e4 : 0) + 0.8 * (x - tx) * (x - tx) * wT;
+        let best = Infinity, bj = 0;
+        for (let j = Math.max(0, i - reach); j <= Math.min(nx - 1, i + reach); j++) {
+          const c0 = cost[(r - 1) * nx + j];
+          if (c0 === Infinity) continue;
+          const sl = ((i - j) * DX) / dyr;
+          const c = c0 + 3 * sl * sl;
+          if (c < best) {
+            best = c;
+            bj = j;
+          }
+        }
+        cost[r * nx + i] = best + here;
+        from[r * nx + i] = bj;
+      }
+    }
+    // arrivée : le quai (case la plus proche, la dernière ligne est libre)
+    let i = xi(xEnd);
+    const path = new Array(nr);
+    for (let r = nr - 1; r >= 0; r--) {
+      path[r] = i;
+      i = from[r * nx + i];
+    }
+    const out = L.route.filter((p) => p[1] < y0);
+    for (let r = 0; r < nr - 1; r++) out.push([mg + path[r] * DX, rows[r]]);
+    out.push([xEnd, yEnd]);
+    return out;
   }
 
   function layout(W) {
@@ -343,7 +443,7 @@
     // spascia : l'île des airs, la nuit ; ballons-sondes, stations, 110 cabanes
     {
       const id = "spascia";
-      const s = m ? isle(id, "spascia", W * 0.5, 330, W * 0.42, 150, 1111, 0.14) : isle(id, "spascia", W * 0.66, 480, 270 * S, 185 * S, 1111, 0.14);
+      const s = m ? isle(id, "spascia", W * 0.45, 330, W * 0.41, 150, 1111, 0.14) : isle(id, "spascia", W * 0.66, 480, 270 * S, 185 * S, 1111, 0.14);
       const lb = mon(id, "chemlab", s.x - s.rx * 0.36, s.y - s.ry * 0.12, 74 * u, 46 * u);
       mon(id, "station", s.x + s.rx * 0.5, s.y + s.ry * 0.25, 18 * u, 22 * u);
       mon(id, "station", s.x - s.rx * 0.1, s.y + s.ry * 0.55, 18 * u, 22 * u);
@@ -396,10 +496,11 @@
     // contact : l'embarcadère où le voilier accoste
     {
       const id = "contact";
-      const c = m ? isle(id, "quay", W * 0.08, 820, W * 0.42, 170, 1515, 0.1) : isle(id, "quay", W * 0.1, 640, 300 * S, 280 * S, 1515, 0.1);
-      L.marks.pier = m ? { x0: c.x + W * 0.3, y0: 700, x1: W * 0.6, y1: 560 } : { x0: c.x + 240 * S, y0: 560, x1: W * 0.44, y1: 420 };
+      const c = m ? isle(id, "quay", W * 0.08, 330, W * 0.42, 150, 1515, 0.1) : isle(id, "quay", W * 0.1, 640, 300 * S, 280 * S, 1515, 0.1);
+      L.marks.pier = m ? { x0: c.x + W * 0.28, y0: 230, x1: W * 0.62, y1: 130 } : { x0: c.x + 240 * S, y0: 560, x1: W * 0.44, y1: 420 };
       c.city = city(c, m ? 15 : 21 * S, 0.2, 0.7);
-      card(id, m ? leftX : rightX, m ? 110 : 160, colW);
+      // mobile : les liens sous l'île, le voilier à quai au-dessus (v6)
+      card(id, m ? leftX : rightX, m ? 500 : 160, colW);
     }
 
     // Route du voilier : x(y) monotone ; elle se termine au bout du quai.
@@ -414,7 +515,7 @@
       P("atos", W * 0.88, 280); P("atos", W * 0.5, 470); P("atos", W * 0.1, 1200);
       P("spascia", W * 0.06, 330); P("spascia", W * 0.5, 540); P("spascia", W * 0.92, 1180);
       P("origines", W * 0.92, 380); P("origines", W * 0.84, 560); P("origines", W * 0.6, 1400);
-      P("contact", W * 0.72, 380);
+      P("contact", W * 0.74, 90);
     } else {
       P("hero", W * 0.5, 0); P("hero", W * 0.5, 700); P("hero", W * 0.46, 1300);
       P("vents", W * 0.3, 950);
@@ -431,6 +532,9 @@
     wp.push([pr.x1 + (m ? 16 : 22), T("contact") + pr.y1 - 4]);
     L.route = wp;
     L.dock = { x: pr.x1 + (m ? 16 : 22), y: T("contact") + pr.y1 - 4, ang: Math.atan2(pr.y1 - pr.y0, pr.x1 - pr.x0) };
+    // Les points ci-dessus ne sont qu'une intention : la route réelle est
+    // recalculée pour ne jamais traverser une île (cf. clearRoute).
+    L.route = clearRoute(L, T("vents"));
     return L;
   }
 
@@ -438,8 +542,14 @@
     const p = L.route;
     if (y <= p[0][1]) return p[0][0];
     if (y >= p[p.length - 1][1]) return p[p.length - 1][0];
+    // dichotomie : la route calculée compte ~500 points
     let i = 0;
-    while (i < p.length - 2 && p[i + 1][1] < y) i++;
+    let hi = p.length - 2;
+    while (i < hi) {
+      const mid = (i + hi + 1) >> 1;
+      if (p[mid][1] < y) i = mid;
+      else hi = mid - 1;
+    }
     const p0 = p[Math.max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(i + 2, p.length - 1)];
     const u = (y - p1[1]) / (p2[1] - p1[1]);
     const m1 = ((p2[0] - p0[0]) / (p2[1] - p0[1] || 1)) * (p2[1] - p1[1]);

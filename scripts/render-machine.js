@@ -670,12 +670,17 @@
     if (!SIM.project(cam, xb, yb, pt)) return;
     const s = pt[2] * (L.m ? 1 : 1.5);
     if (s < 0.05) return;
-    const x = pt[0];
-    const y = pt[1];
+    let x = pt[0];
+    let y = pt[1];
     if (v.scrollY < (L.cam.c0 + L.cam.c1) / 2) {
       // écran d'accueil : le kitesurfeur en fil de fer (aile = la ressource
-      // qui tire, les deux lignes = les liens de communication)
-      const k = s * (L.m ? 1.25 : 1.1);
+      // qui tire, les deux lignes = les liens de communication). Sur grand
+      // écran, décalé et agrandi exactement comme côté Façade.
+      if (!L.m) {
+        x += v.W * 0.2;
+        y -= 40 * s;
+      }
+      const k = s * (L.m ? 1.25 : 2.4);
       const sway = 0.22 * Math.sin(v.tsec * 0.55) + 0.08 * Math.sin(v.tsec * 1.7);
       SIM.field(xb, yb, v.tf * SIM.DT, SIM.systems[0].g, fv);
       const dir = fv[0] >= 0 ? 1 : -1;

@@ -383,17 +383,21 @@ vec4 A=uA*clamp(1.6-fw*k*1.2,0.,1.);vec4 s=sin(ph);g=vec2(-dot(A*s,uKx),-dot(A*s
 float line(float d,float w,float fw){return 1.-smoothstep(w*.5,w*.5+fw,abs(d));}
 vec3 facade(vec2 p,float fw,float far){
 float v=clamp(p.y/uDocH,0.,1.);vec4 pw=texture2D(uPal,vec2(.125,v));vec3 wash=pw.rgb;float nt=texture2D(uPal,vec2(.625,v)).r;
-float d=dist(p);if(d<0.)return PAPER;
+// sous une île : de l'eau, pas du papier. L'île SVG défile avec la page
+// alors que ce canvas a une image de retard en défilement rapide : une
+// empreinte couleur papier apparaissait comme une ombre blanche décalée.
+float d0=dist(p);float d=max(d0,0.);
 float pig=.62+.22*(vn(p*.0045+vec2(3.1,uT*.004))-.5)+.12*(vn(p*.021)-.5);
 pig+=.38*exp(-d/9.);pig-=.14*vn(p*.42);
 vec3 col=mix(PAPER,wash,clamp(pig+nt*.5,0.,1.));
+if(d0<0.)return col;
 vec2 g;float h=swell(p,fw,g);
 float off=smoothstep(26.,60.,d)*(1.-far);
 float n=vn(p*vec2(.03,.05)+vec2(uT*.06,0.));
 float ink=line((h-.5)/(length(g)+1e-4),.9,fw)*smoothstep(.45,.7,n)*off;
 ink+=line((h+.1)/(length(g)+1e-4),.7,fw)*smoothstep(.62,.8,n)*off*.6;
 for(int i=1;i<4;i++){float fi=float(i);float wd=fi*8.+2.*sin(p.x*.05+fi+h*1.5);ink+=line(d-wd,.8,fw)*(.75-fi*.18)*step(.25,vn(p*.08+fi));}
-float br=smoothstep(.15,.6,h)*(1.-smoothstep(1.,6.,d));col=mix(col,PAPER*1.02,br*.85);
+float br=smoothstep(.15,.6,h)*(1.-smoothstep(1.,6.,d));col=mix(col,PAPER*1.02,br*.4);
 col=mix(col,mix(INK,vec3(.86,.88,.97),nt*.85),clamp(ink,0.,1.)*.5*(1.-far));
 col*=.975+.04*hash(floor(p*1.5));
 return col;}
