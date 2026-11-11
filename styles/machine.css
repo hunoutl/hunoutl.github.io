@@ -63,8 +63,21 @@ body {
 .part { position: absolute; z-index: 1; font-size: 11px; color: var(--cy); white-space: nowrap; background: rgba(2, 6, 4, .85); padding: 0 3px; }
 .winds em { font-style: normal; color: var(--dim); font-weight: 400; }
 
-#floors { position: relative; transition: opacity 0.18s; }
-#floors.lang-fading { opacity: 0; }
+#floors { position: relative; }
+/* Changement de langue : seuls les TEXTES fondent. Une opacité sur #floors
+   en faisait un contexte d'empilement : le titre et le premier cartouche
+   (z-index 7) passaient sous les nuages (6) le temps du fondu, et les îles,
+   identiques d'une langue à l'autre, clignotaient avec. On fait fondre le
+   contenu des cartouches, pas les cartouches : leur fond et le voile du
+   titre restent en place, les nuages ne réapparaissent pas derrière.
+   Sans fond propre (étiquettes .tag, consigne de défilement) : elles
+   fondent entières. */
+.floor-inner > :not(.isle-layer) > *,
+.floor-inner > :not(.isle-layer):not(:has(> *)),
+.floor-inner > .scroll-hint { transition: opacity 0.18s; }
+#floors.lang-fading .floor-inner > :not(.isle-layer) > *,
+#floors.lang-fading .floor-inner > :not(.isle-layer):not(:has(> *)),
+#floors.lang-fading .floor-inner > .scroll-hint { opacity: 0; }
 .floor { position: relative; overflow: hidden; }
 /* Le texte n'est jamais coupé par le bas d'un étage : il peut déborder sur
    le suivant (ex. premier panneau de l'accueil, placé selon la fenêtre).

@@ -39,7 +39,7 @@ const STACK = {
 
 const T = {
   en: {
-    sub: "AI/HPC engineer · uptime 5+ yrs · large-scale AI &amp; HPC infra",
+    sub: "AI/HPC Engineer · uptime 5+ yrs · large-scale AI &amp; HPC infra",
     lede: "Multi-node GPU training, supercomputer ops, hybrid cloud/on-prem orchestration. Distributed training internals (FSDP/DDP/ZeRO, NCCL, tensor/pipeline parallelism), Slurm, Kubernetes, MPI/OpenMP.",
     hint: "scroll → camera climbs through cloud.layer: pitch φ 9° → 90°, perspective → plan view",
     about: "Optimizing GPU clusters is only half the job — the other half is making that compute usable by people who aren't systems experts. 4 years supporting ~3,000 researchers on Jean Zay (one of France's largest supercomputers) taught me as much about NCCL tuning and multi-node scaling as about writing docs and giving talks that don't assume prior HPC knowledge.",
@@ -48,7 +48,7 @@ const T = {
     readUp: "y axis = abstraction stack, cloud → metal (and time, read backwards).",
   },
   fr: {
-    sub: "Ingénieur IA/HPC · uptime 5+ ans · infra IA &amp; HPC à grande échelle",
+    sub: "AI/HPC Engineer · uptime 5+ ans · infra IA &amp; HPC à grande échelle",
     lede: "Entraînement GPU multi-nœud, exploitation de supercalculateurs, orchestration cloud/on-prem hybride. Rouages de l'entraînement distribué (FSDP/DDP/ZeRO, NCCL, parallélisme tenseur/pipeline), Slurm, Kubernetes, MPI/OpenMP.",
     hint: "scroll → la caméra traverse cloud.layer : φ 9° → 90°, perspective → vue en plan",
     about: "Optimiser des clusters GPU n'est que la moitié du travail — l'autre moitié consiste à rendre ce calcul utilisable par des gens qui ne sont pas experts systèmes. 4 ans à accompagner ~3 000 chercheurs sur Jean Zay (l'un des plus gros supercalculateurs français) m'ont autant appris sur le réglage NCCL et le multi-nœud que sur l'écriture de docs et d'exposés sans prérequis HPC.",

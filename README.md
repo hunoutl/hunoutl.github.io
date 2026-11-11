@@ -1,6 +1,6 @@
 # Léo Hunout — Machine
 
-CV en ligne de Léo Hunout, ingénieur IA/HPC (supercalculateurs, clusters GPU,
+CV en ligne de Léo Hunout, AI/HPC Engineer (supercalculateurs, clusters GPU,
 entraînement de modèles à grande échelle).
 
 Le site existe en deux faces, sur deux domaines :
