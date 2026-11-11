@@ -137,7 +137,7 @@ body {
 .sky-title h1 { margin: 6px 0 8px; font-size: 96px; line-height: 0.95; letter-spacing: -0.04em; font-weight: 700; color: #fff; text-shadow: 0 0 24px rgba(57, 255, 136, 0.35); }
 .sky-title .sub { margin: 0 0 12px; color: var(--cy); font-size: 15px; }
 .sky-title .lede { margin: 0; max-width: 640px; font-size: 14px; color: var(--text); }
-.scroll-hint { left: 0; right: 0; top: 812px; margin: 0; text-align: center; font-size: 12px; color: var(--cy); }
+.scroll-hint { left: 0; right: 0; top: max(600px, min(812px, calc(var(--vh, 100vh) - 90px))); margin: 0; text-align: center; font-size: 12px; color: var(--cy); }
 .hud { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(18, 50, 79, 0.25); font-size: 12px; }
 .hud p { margin: 0 0 4px; }
 .hud b { color: var(--dim); font-weight: 400; }
@@ -174,7 +174,7 @@ body {
   .sky-title h1 { font-size: 64px; }
   .sky-title .sub { font-size: 13px; }
   .sky-title .lede { font-size: 12.5px; }
-  .scroll-hint { top: 760px; font-size: 11px; padding: 0 16px; }
+  .scroll-hint { top: max(520px, min(780px, calc(var(--vh, 100vh) - 150px))); font-size: 11px; padding: 0 16px; }
   .layer-mark { left: 1px; font-size: 9.5px; }
 }
 

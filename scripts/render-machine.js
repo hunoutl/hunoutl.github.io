@@ -300,6 +300,17 @@
         c.style.left = `${b.x}px`;
         c.style.top = `${b.y}px`;
         c.style.width = `${b.w}px`;
+        // premier panneau (ordinateur) : jamais coupé par le bas de l'écran.
+        // Il reste à sa place s'il tient entier dans le premier écran,
+        // sinon il passe juste sous le bas de l'écran. --vh = 100vh de la
+        // page de départ dans l'aperçu (cf. drag-swipe.js) : même position
+        // dans l'aperçu et à l'arrivée, identique Façade / Machine.
+        if (c.dataset.card === "hero2" && !L.m) {
+          const VH = "var(--vh, 100vh)";
+          // plafond : ne jamais descendre sur le panneau de l'étage suivant
+          const cap = L.byId.vents.top + L.cards.vents.y - 24 - c.offsetHeight;
+          c.style.top = `max(${b.y}px, min(calc(${VH} + 40px), ${Math.round(cap)}px, calc(${b.y}px + (${b.y + 290}px - ${VH}) * 1000)))`;
+        }
       });
       inner.querySelectorAll("[data-tag]").forEach((t) => {
         const [x, y] = tagPos(L, t.dataset.tag);
