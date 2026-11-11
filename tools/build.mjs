@@ -47,6 +47,8 @@ html = html.replace(/\s*<link rel="(?:prefetch|preconnect)"[^>]*>/g, "");
 // requête externe, et Chromium décode les polices data: de façon
 // synchrone (pas de texte qui change de police après le premier rendu).
 const transformCss = (css) => css.replace(/url\((?:"|')?((?:\.\.\/)?assets\/[\w./-]+\.(?:woff2|webp|png|svg))(?:"|')?\)/g, (_, p) => `url(${dataUri(p.replace(/^\.\.\//, ""))})`);
+// Favicon (SVG) et icône d'écran d'accueil (PNG) inlinées en data URI.
+html = html.replace(/(<link rel="(?:icon|apple-touch-icon)" href=")(assets\/[\w.-]+)"/g, (_, a, p) => `${a}${dataUri(p)}"`);
 html = html.replace(/<link rel="stylesheet" href="([^"]+)" \/>/g, (_, p) => `<style>\n${transformCss(read(p))}</style>`);
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, p) => `<script>\n${transformScript(p, read(p))}</script>`);
 
