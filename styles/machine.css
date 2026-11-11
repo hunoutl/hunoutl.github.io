@@ -66,6 +66,13 @@ body {
 #floors { position: relative; transition: opacity 0.18s; }
 #floors.lang-fading { opacity: 0; }
 .floor { position: relative; overflow: hidden; }
+/* Le texte n'est jamais coupé par le bas d'un étage : il peut déborder sur
+   le suivant (ex. premier panneau de l'accueil, placé selon la fenêtre).
+   La largeur reste rognée (pas de défilement horizontal). La hauteur des
+   étages couvre normalement le texte (scripts/floor-fit.js). */
+@supports (overflow: clip) {
+  .floor { overflow-x: clip; overflow-y: visible; }
+}
 .floor-inner { position: absolute; inset: 0; }
 .isle-layer { position: absolute; left: 0; top: 0; z-index: 1; overflow: visible; }
 .isle-layer text { font-family: var(--mono); text-anchor: middle; }

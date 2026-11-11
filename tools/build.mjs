@@ -52,7 +52,7 @@ let html = read("index.html");
 // rendu, puis remplacées par lang-switch.js (rendu inchangé, au pixel près).
 const NBSP = "\u00a0", NNBSP = "\u202f";
 function typesetText(t, lang) {
-  t = t.replace(/(\p{L})'(\p{L})/gu, "$1’$2");
+  t = t.replace(/(\p{L})'(\p{L})/gu, "$1’$2").replace(/(\d) (\d{3})(?!\d)/g, `$1${NNBSP}$2`);
   if (lang !== "fr") return t;
   return t
     .replace(/(\S) ([:%])(?=\s|$)/g, `$1${NBSP}$2`)

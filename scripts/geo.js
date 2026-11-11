@@ -27,6 +27,27 @@
   ];
   const IDS = FLOORS.map((f) => f.id);
 
+  // Marge ajoutée à la hauteur de base de chaque étage pour que son texte
+  // tienne entier, fonction de la seule largeur W et IDENTIQUE sur les deux
+  // faces : table mesurée hors ligne sur les deux sites et les deux langues
+  // (tools/fit-floors.mjs → scripts/floor-fit.js, même fichier des deux
+  // côtés). Pas de mesure au chargement : une synchronisation dynamique
+  // des hauteurs a été essayée et abandonnée (redimensionnement visible).
+  function fitExtra(id, W, table) {
+    const T = window.FLOOR_FIT;
+    const a = T && T[table || "d"] && T[table || "d"][id];
+    if (!a || !a.length) return 0;
+    const i = (W - T.w0) / T.step;
+    const clamp = (k) => Math.max(0, Math.min(a.length - 1, k));
+    // entre deux largeurs mesurées : la plus exigeante des deux
+    return Math.max(a[clamp(Math.floor(i))], a[clamp(Math.ceil(i))]);
+  }
+  const baseHeight = (f, W) => (W < BP ? f.m : f.d);
+  const floorH = (f, W) => baseHeight(f, W) + fitExtra(f.id, W);
+  // Descente du plan de coupe du navire (étage « vents ») quand le texte
+  // du cartouche, au-dessus de lui sur mobile, le recouvrirait (même table).
+  const shipShift = (W) => fitExtra("ship", W, "s");
+
   function rng(seed) {
     let s = seed >>> 0;
     return function () {
@@ -237,7 +258,7 @@
     const L = { W, m, floors: [], byId: {}, isles: [], annex: [], cards: {}, marks: {}, mons: [], labels: {} };
     let y = 0;
     for (const f of FLOORS) {
-      const fl = { id: f.id, top: y, h: m ? f.m : f.d, hour: f.hour };
+      const fl = { id: f.id, top: y, h: floorH(f, W), hour: f.hour };
       L.floors.push(fl);
       L.byId[f.id] = fl;
       y += fl.h;
@@ -303,7 +324,7 @@
 
     // vents → le navire en plan de coupe (compétences / stack)
     // encart (cartouche) : centre, largeur, hauteur ; le dessin est dans GEO.ship()
-    L.ship = m ? { x: W * 0.5, y: 960, w: W - 32, h: 470 } : { x: W * 0.68, y: 500, w: Math.min(640, W * 0.5), h: 640 };
+    L.ship = m ? { x: W * 0.5, y: 960 + shipShift(W), w: W - 32, h: 470 } : { x: W * 0.68, y: 500, w: Math.min(640, W * 0.5), h: 640 };
     card("vents", leftX, m ? 70 : 150, colW);
 
     // ---- v5 : une île = un monde (thème, architecture, monuments) ----
@@ -1316,7 +1337,13 @@
     BP, FLOORS, IDS, rng, blob, pathD, inside, scatter, shrink, layout, routeX, boatY, hourAt, cloudState,
     floorHeight(id, W) {
       const f = FLOORS.find((x) => x.id === id);
-      return f ? (W < BP ? f.m : f.d) : 0;
+      return f ? floorH(f, W) : 0;
+    },
+    shipShift,
+    // hauteur sans la marge mesurée (pour tools/fit-floors.mjs)
+    baseHeight(id, W) {
+      const f = FLOORS.find((x) => x.id === id);
+      return f ? baseHeight(f, W) : 0;
     },
     layoutWidth() {
       return window.innerWidth;

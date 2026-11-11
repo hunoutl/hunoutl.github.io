@@ -32,7 +32,8 @@ function typeset(root, lang) {
     acceptNode: (n) => (n.parentElement && n.parentElement.closest("code, pre, script, style") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
   });
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    let s = n.nodeValue.replace(/(\p{L})'(\p{L})/gu, "$1’$2");
+    // apostrophes courbes ; milliers jamais coupés en fin de ligne (« 3 000 »)
+    let s = n.nodeValue.replace(/(\p{L})'(\p{L})/gu, "$1’$2").replace(/(\d) (\d{3})(?!\d)/g, `$1${NNBSP}$2`);
     if (lang === "fr") {
       s = s
         .replace(/(\S) ([:%])(?=\s|$)/g, `$1${NBSP}$2`)

@@ -308,7 +308,9 @@
         if (c.dataset.card === "hero2" && !L.m) {
           const VH = "var(--vh, 100vh)";
           // plafond : ne jamais descendre sur le panneau de l'étage suivant
-          const cap = L.byId.vents.top + L.cards.vents.y - 24 - c.offsetHeight;
+          // (au-dessus du cartouche ET du plan de coupe du navire)
+          const below = Math.min(L.cards.vents.y, L.ship.y - L.ship.h / 2);
+          const cap = L.byId.vents.top + below - 24 - c.offsetHeight;
           c.style.top = `max(${b.y}px, min(calc(${VH} + 40px), ${Math.round(cap)}px, calc(${b.y}px + (${b.y + 290}px - ${VH}) * 1000)))`;
         }
       });

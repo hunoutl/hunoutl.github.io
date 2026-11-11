@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SHARED = ["scripts/geo.js", "scripts/sim-core.js", "scripts/bar.js", "tools/build.mjs", "tools/check-shared.mjs"];
+const SHARED = ["scripts/geo.js", "scripts/floor-fit.js", "scripts/sim-core.js", "scripts/bar.js", "tools/build.mjs", "tools/check-shared.mjs", "tools/fit-floors.mjs"];
 const here = join(dirname(fileURLToPath(import.meta.url)), "..");
 const other = process.argv[2];
 if (!other) {
