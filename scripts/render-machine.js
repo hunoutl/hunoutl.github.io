@@ -734,7 +734,17 @@
       ctx.fillStyle = PH;
       for (const [px, py] of [[-sp, 7 * k], [0, -12 * k], [sp, 7 * k], [0, -5 * k]]) ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
       ctx.restore();
-      if (s > 0.3) tag(ctx, kx + sp + 6, ky, "kite · 2 lines · job 0x2a", AMBER);
+      if (s > 0.3) {
+        // l'aile réelle (référence perso) ; à gauche de l'aile si la
+        // place manque à droite (mobile)
+        const l1 = "kite · eleveight RS · 12 m² · 2025";
+        const l2 = "2 lines · job 0x2a";
+        ctx.font = `10px ${MONO}`;
+        const lw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width);
+        const lx = kx + sp + 6 + lw + 4 > window.innerWidth ? kx - sp - 6 - lw : kx + sp + 6;
+        tag(ctx, lx, ky, l1, AMBER);
+        tag(ctx, lx, ky + 13, l2, AMBER);
+      }
       return;
     }
     ctx.strokeStyle = AMBER;
