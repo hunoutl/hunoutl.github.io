@@ -670,6 +670,31 @@ gl_FragColor=vec4(col,1.);}`;
     ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
     if (window.RENDER) RENDER.frame(ctx, SIM);
   }
+  // Kitesurfeur de l'accueil, sur grand écran (Façade et Machine) : la
+  // perspective dépend de la largeur, et le point projeté du voilier
+  // tombait sous le bas de l'écran (1280 × 720) ou derrière le cartouche
+  // (écrans 4K). On le cale au départ entre l'horizon et le bas de l'écran,
+  // à taille constante ; il suit ensuite la caméra pendant la montée.
+  const kc = { L: null, vh: 0, dy: 0, k: 1 };
+  SIM.kiteAnchor = function (L, vh, sx, sy, sc, out) {
+    if (kc.L !== L || kc.vh !== vh) {
+      const c0 = camera(L, 0);
+      const yb = GEO.boatY(L, 0, vh) - (1 - c0.p) * (1 - c0.p) * 1700;
+      const p0 = [0, 0, 0];
+      project(c0, GEO.routeX(L, yb), yb, p0);
+      const ty = Math.max(L.cam.yh + 150, Math.min(L.cam.yh + 300, vh - 120));
+      kc.L = L;
+      kc.vh = vh;
+      kc.dy = ty - p0[1];
+      kc.k = (1.55 * Math.min(1.3, Math.max(1, L.W / 1440))) / Math.max(0.05, p0[2] * 1.5);
+      // écran peu haut : kite plus petit, pour que l'aile reste sous les nuages
+      kc.k *= Math.max(0.6, Math.min(1, (vh - L.cam.yh) / 400));
+    }
+    out[0] = sx + L.W * 0.2;
+    out[1] = sy + kc.dy;
+    out[2] = sc * kc.k;
+    return out;
+  };
   SIM.redraw = function () {
     lastKey = "";
     if (ctx) draw();

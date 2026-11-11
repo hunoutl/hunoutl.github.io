@@ -659,12 +659,13 @@
   }
 
   // le job qui migre, à la position du voilier ; il termine au quai
+  const kanc = [0, 0, 0];
   function drawJob(ctx, SIM) {
     const v = SIM.view;
     const L = SIM.layout;
     const cam = v.cam;
     const e = cam.p;
-    const yb = GEO.boatY(L, v.scrollY) - (1 - e) * (1 - e) * (L.m ? 1500 : 1700);
+    const yb = GEO.boatY(L, v.scrollY, v.vh) - (1 - e) * (1 - e) * (L.m ? 1500 : 1700);
     const docked = yb >= L.dock.y - 0.5;
     const xb = GEO.routeX(L, yb);
     if (!SIM.project(cam, xb, yb, pt)) return;
@@ -676,11 +677,13 @@
       // écran d'accueil : le kitesurfeur en fil de fer (aile = la ressource
       // qui tire, les deux lignes = les liens de communication). Sur grand
       // écran, décalé et agrandi exactement comme côté Façade.
+      let k = s * 1.25;
       if (!L.m) {
-        x += v.W * 0.2;
-        y -= 40 * s;
+        SIM.kiteAnchor(L, v.vh, x, y, s, kanc);
+        x = kanc[0];
+        y = kanc[1];
+        k = kanc[2];
       }
-      const k = s * (L.m ? 1.25 : 2.4);
       const sway = 0.22 * Math.sin(v.tsec * 0.55) + 0.08 * Math.sin(v.tsec * 1.7);
       SIM.field(xb, yb, v.tf * SIM.DT, SIM.systems[0].g, fv);
       const dir = fv[0] >= 0 ? 1 : -1;

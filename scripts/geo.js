@@ -505,11 +505,11 @@
     // contact : l'embarcadère où le voilier accoste
     {
       const id = "contact";
-      const c = m ? isle(id, "quay", W * 0.08, 330, W * 0.42, 150, 1515, 0.1) : isle(id, "quay", W * 0.1, 640, 300 * S, 280 * S, 1515, 0.1);
-      L.marks.pier = m ? { x0: c.x + W * 0.28, y0: 230, x1: W * 0.62, y1: 130 } : { x0: c.x + 240 * S, y0: 560, x1: W * 0.44, y1: 420 };
+      const c = m ? isle(id, "quay", W * 0.08, 430, W * 0.42, 110, 1515, 0.1) : isle(id, "quay", W * 0.1, 640, 300 * S, 280 * S, 1515, 0.1);
+      L.marks.pier = m ? { x0: c.x + W * 0.28, y0: 360, x1: W * 0.62, y1: 285 } : { x0: c.x + 240 * S, y0: 560, x1: W * 0.44, y1: 420 };
       c.city = city(c, m ? 15 : 21 * S, 0.2, 0.7);
       // mobile : les liens sous l'île, le voilier à quai au-dessus (v6)
-      card(id, m ? leftX : rightX, m ? 500 : 160, colW);
+      card(id, m ? leftX : rightX, m ? 535 : 160, colW);
     }
 
     // Route du voilier : x(y) monotone ; elle se termine au bout du quai.
@@ -524,7 +524,7 @@
       P("atos", W * 0.88, 280); P("atos", W * 0.5, 470); P("atos", W * 0.1, 1200);
       P("spascia", W * 0.06, 330); P("spascia", W * 0.5, 540); P("spascia", W * 0.92, 1180);
       P("origines", W * 0.92, 380); P("origines", W * 0.84, 560); P("origines", W * 0.6, 1400);
-      P("contact", W * 0.74, 90);
+      P("contact", W * 0.74, 240);
     } else {
       P("hero", W * 0.5, 0); P("hero", W * 0.5, 700); P("hero", W * 0.46, 1300);
       P("vents", W * 0.3, 950);
@@ -566,14 +566,33 @@
     const u2 = u * u, u3 = u2 * u;
     return (2 * u3 - 3 * u2 + 1) * p1[0] + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2[0] + (u3 - u2) * m2;
   }
-  // Position du voilier sur la route en fonction du scroll : il accélère
-  // sur la fin pour atteindre le quai quelle que soit la hauteur d'écran
-  // (fonction du seul scroll, donc identique aperçu / arrivée).
-  function boatY(L, s) {
+  // Position du voilier sur la route en fonction du scroll (fonction du
+  // seul scroll, donc identique aperçu / arrivée). v6 :
+  // - il reste au repère de lecture (READ px sous le haut de l'écran) ;
+  // - à l'approche, il ralentit jusqu'à l'arrêt : ses B derniers px de
+  //   route prennent 2B px de scroll, vitesse 1 → 0 sans à-coup ;
+  // - si le quai n'atteindrait pas le repère avant la fin de la page
+  //   (grand écran), l'avance nécessaire est répartie en douceur sur
+  //   APP px de scroll avant l'approche (et non plus 2,2× la vitesse du
+  //   scroll sur 320 px, qui faisait filer le voilier jusqu'au quai).
+  // Hauteur d'écran : la vraie sur ordinateur (identique entre l'aperçu et
+  // l'arrivée), une borne fixe sur mobile, où la barre d'adresse la fait
+  // varier entre les deux pages.
+  function boatY(L, s, vh) {
     const yEnd = L.dock.y;
-    const k0 = yEnd - L.READ - 700;
-    let y = s + L.READ + Math.max(0, s - k0) * 1.2;
-    return Math.min(y, yEnd);
+    const B = L.m ? 110 : 140;
+    const APP = L.m ? 700 : 1600;
+    const VH = L.m ? 1000 : vh || 900;
+    const s2 = Math.min(yEnd - L.READ + B, L.docH - VH);
+    const s1 = s2 - 2 * B;
+    if (s >= s2) return yEnd;
+    if (s >= s1) {
+      const t = s - s1;
+      return yEnd - B + t - (t * t) / (4 * B);
+    }
+    const extra = Math.max(0, yEnd - B - (s1 + L.READ));
+    const u = Math.max(0, Math.min(1, (s - (s1 - APP)) / APP));
+    return s + L.READ + extra * u * u * (3 - 2 * u);
   }
 
   function hourAt(L, y) {
