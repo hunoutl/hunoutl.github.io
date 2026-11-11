@@ -8,10 +8,13 @@ const ICON_LINKEDIN = `<svg viewBox="0 0 24 24" width="20" height="20" fill="cur
 const ICON_GITHUB = `<svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>`;
 const ICON_GITLAB = `<svg viewBox="0 0 24 22" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 21.6 16.2 8.7H7.8L12 21.6Z"/><path d="M4.6 8.7 3 13.6a.9.9 0 0 0 .33 1L12 21.6 4.6 8.7Z"/><path d="M4.6 8.7h3.2L6.4 2.9a.45.45 0 0 0-.86 0L4.6 8.7Z"/><path d="M19.4 8.7 21 13.6a.9.9 0 0 1-.33 1L12 21.6l7.4-12.9Z"/><path d="M19.4 8.7h-3.2l1.4-5.8a.45.45 0 0 1 .86 0l1 3.87v1.93Z"/></svg>`;
 
+const ICON_HF = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-3.5 6.2a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Zm7 0a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2ZM7.4 13.4h9.2a4.6 4.6 0 0 1-9.2 0Z"/></svg>`;
+
 const SOCIAL = [
   { href: "https://www.linkedin.com/in/leo-hunout", name: "linkedin", handle: "in/leo-hunout", icon: ICON_LINKEDIN },
   { href: "https://github.com/hunoutl", name: "github", handle: "hunoutl", icon: ICON_GITHUB },
   { href: "https://gitlab.com/hunoutl", name: "gitlab", handle: "hunoutl", icon: ICON_GITLAB },
+  { href: "https://huggingface.co/hunoutl", name: "huggingface", handle: "hunoutl", icon: ICON_HF },
 ];
 
 // Les 5 parties du navire de la Façade = les 5 couches de la stack (même ordre que GEO.ship().parts).

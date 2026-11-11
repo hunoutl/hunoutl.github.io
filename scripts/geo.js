@@ -509,7 +509,7 @@
       L.marks.pier = m ? { x0: c.x + W * 0.28, y0: 360, x1: W * 0.62, y1: 285 } : { x0: c.x + 240 * S, y0: 560, x1: W * 0.44, y1: 420 };
       c.city = city(c, m ? 15 : 21 * S, 0.2, 0.7);
       // mobile : les liens sous l'île, le voilier à quai au-dessus (v6)
-      card(id, m ? leftX : rightX, m ? 535 : 160, colW);
+      card(id, m ? leftX : rightX, m ? 515 : 160, colW);
     }
 
     // Route du voilier : x(y) monotone ; elle se termine au bout du quai.
