@@ -375,7 +375,7 @@
   // --- WebGL : la mer (les deux modes) ---
   const VS = "attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
   const FS = `precision highp float;
-uniform vec2 uView;uniform float uDpr,uCH,uScroll,uFlat,uDocH,uT,uMode,uHalo;
+uniform vec2 uView;uniform float uDpr,uCH,uPad,uScroll,uFlat,uDocH,uT,uMode,uHalo;
 uniform vec4 uCam,uKx,uKy,uA,uPh;uniform vec3 uSun,uDG;
 uniform vec3 uR0,uR1,uR2,uR3;uniform sampler2D uPal,uDist;
 const vec3 PAPER=vec3(.957,.925,.855);const vec3 INK=vec3(.13,.16,.2);
@@ -429,7 +429,7 @@ col*=.975+.04*hash(floor(sp*1.5));
 return mix(col,INK,line(e,1.6,1.));}
 vec3 skyM(vec2 sp,float e){vec3 col=BG;vec2 gq=abs(fract(sp/32.)-.5)*32.;col+=PH*.05*(1.-smoothstep(0.,1.,min(gq.x,gq.y)));
 return col+PH*line(e,1.2,1.)*.7;}
-void main(){vec2 sp=vec2(gl_FragCoord.x,uCH-gl_FragCoord.y)/uDpr;float W=uView.x;float md=uMode;
+void main(){vec2 sp=vec2(gl_FragCoord.x,uCH-gl_FragCoord.y)/uDpr-vec2(0.,uPad);float W=uView.x;float md=uMode;
 vec2 p;float fw;float far=0.;float hz=uCam.y-uCam.x*uCam.z/max(uCam.w,1e-5);
 if(uFlat>.5){p=vec2(sp.x,uScroll+sp.y);fw=1./uDpr;}else{
 float a=sp.y-uCam.y;float den=uCam.x*uCam.z+a*uCam.w;
@@ -535,6 +535,7 @@ gl_FragColor=vec4(col,1.);}`;
     gl.uniform2f(U.uView, v.W, v.vh);
     gl.uniform1f(U.uDpr, sea.width / v.W);
     gl.uniform1f(U.uCH, sea.height);
+    gl.uniform1f(U.uPad, v.pad);
     gl.uniform1f(U.uScroll, v.scrollY);
     gl.uniform1f(U.uFlat, cam.flat ? 1 : 0);
     gl.uniform1f(U.uDocH, SIM.layout.docH);
@@ -558,7 +559,7 @@ gl_FragColor=vec4(col,1.);}`;
     hash3, swell, camera, project, packets, eachTracer, field, dist,
     systems: [],
     layout: null,
-    view: { scrollY: 0, vh: 0, W: 0, tf: 0, n0: 0, frac: 0, dpr: 1, visible: [], cam: null, tsec: 0 },
+    view: { scrollY: 0, vh: 0, pad: 0, y0: 0, y1: 0, W: 0, tf: 0, n0: 0, frac: 0, dpr: 1, visible: [], cam: null, tsec: 0 },
     embedded: isEmbedded,
     reduceMotion,
     sunPos(cam) {
@@ -588,9 +589,64 @@ gl_FragColor=vec4(col,1.);}`;
     uploadPalette();
   }
 
+  // Canvas qui défilent avec la page (bug du 22/11 : au scroll rapide,
+  // les vagues autour des îles et la nuit de SPASCIA glissaient par
+  // rapport aux îles). Les îles sont un SVG dans la page : le navigateur
+  // les fait défiler lui-même, de façon asynchrone, sans attendre le
+  // JavaScript. Des canvas en position: fixed, redessinés au
+  // requestAnimationFrame, ont alors une image (ou plus) de retard.
+  // Sur la carte (caméra « flat »), les deux canvas sont donc placés DANS
+  // la page (position absolute + translate), plus hauts que l'écran d'une
+  // marge PAD en haut et en bas : entre deux images, le navigateur les
+  // fait défiler avec les îles, et la marge couvre ce qui entre à l'écran.
+  // Pendant l'ouverture (perspective, ancrée à l'écran), ils restent fixes.
+  // view.pad = décalage écran → canvas (y canvas = y écran + pad) ;
+  // view.y0 / view.y1 = bande du document couverte par le canvas.
+  // Ce qui suit l'écran (le voilier en route) se dessine, sur la carte,
+  // dans un troisième canvas resté fixe : dans #fx, qui défile avec la
+  // page entre deux images, il tremblerait au scroll rapide.
+  let fixCv = null;
+  let fixCtx = null;
+  let fixDirty = false;
+  SIM.screenCtx = function (c) {
+    if (placed === "f" || !fixCtx) return c;
+    fixDirty = true;
+    return fixCtx;
+  };
+  let PAD = 0;
+  let canvasH = 0;
+  let docLimit = Infinity;
+  let placed = "";
+  // bas du contenu (et non scrollHeight, qui compterait le canvas
+  // lui-même s'il dépassait après un changement de largeur)
+  function measureDoc() {
+    const f = document.getElementById("floors");
+    docLimit = f ? f.offsetTop + f.offsetHeight : document.documentElement.scrollHeight;
+  }
+  function placeCanvas(flat) {
+    const v = SIM.view;
+    let o = v.scrollY;
+    if (flat && PAD) o = Math.round(Math.max(0, Math.min(v.scrollY - PAD, docLimit - canvasH)));
+    v.pad = v.scrollY - o;
+    v.y0 = o;
+    v.y1 = o + canvasH;
+    const key = flat ? `a${o}` : "f";
+    if (key === placed) return;
+    placed = key;
+    for (const c of [sea, fx]) {
+      if (!c) continue;
+      c.style.position = flat ? "absolute" : "fixed";
+      c.style.transform = flat ? `translate3d(0,${o}px,0)` : "none";
+    }
+  }
+
   function sizeCanvas() {
     const W = window.innerWidth;
-    const H = window.innerHeight;
+    const vh = window.innerHeight;
+    PAD = Math.round(Math.min(360, vh * 0.3));
+    const H = vh + 2 * PAD;
+    canvasH = H;
+    placed = "";
     const mob = W < GEO.BP;
     const dpr = window.devicePixelRatio || 1;
     const d2 = Math.min(dpr, mob ? 1.5 : 1.75);
@@ -602,6 +658,13 @@ gl_FragColor=vec4(col,1.);}`;
       c.style.height = `${H}px`;
       c.width = Math.round(W * d);
       c.height = Math.round(H * d);
+    }
+    if (fixCv) {
+      const d = SIM.view.dpr;
+      fixCv.style.width = `${W}px`;
+      fixCv.style.height = `${vh}px`;
+      fixCv.width = Math.round(W * d);
+      fixCv.height = Math.round(vh * d);
     }
     lastKey = "";
   }
@@ -655,8 +718,9 @@ gl_FragColor=vec4(col,1.);}`;
     if ((reduceMotion || pausedT !== null || typeof window.__SIM_T === "number") && key === lastKey) return;
     lastKey = key;
     v.cam = camera(SIM.layout, v.scrollY);
-    const top = v.cam.flat ? v.scrollY - 120 : -1e9;
-    const bot = v.scrollY + v.vh + 120;
+    placeCanvas(v.cam.flat);
+    const top = v.cam.flat ? v.y0 - 120 : -1e9;
+    const bot = v.y1 + 120;
     v.visible.length = 0;
     for (let i = 0; i < SIM.systems.length; i++) {
       const sys = SIM.systems[i];
@@ -673,7 +737,16 @@ gl_FragColor=vec4(col,1.);}`;
       if (k >= 0 && idleTick++ % 2 === 1) needFloor(k);
     }
     drawGL();
-    ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
+    // tout le canvas (marges comprises), puis repère écran décalé de pad
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, fx.width, fx.height);
+    ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, v.pad * v.dpr);
+    if (fixDirty) {
+      fixCtx.setTransform(1, 0, 0, 1, 0, 0);
+      fixCtx.clearRect(0, 0, fixCv.width, fixCv.height);
+      fixDirty = false;
+    }
+    if (fixCtx) fixCtx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
     if (window.RENDER) RENDER.frame(ctx, SIM);
   }
   // Kitesurfeur de l'accueil, sur grand écran (Façade et Machine) : la
@@ -741,6 +814,11 @@ gl_FragColor=vec4(col,1.);}`;
     fx = document.getElementById("fx");
     if (!fx) return;
     ctx = fx.getContext("2d");
+    fixCv = document.createElement("canvas");
+    fixCv.setAttribute("aria-hidden", "true");
+    fixCv.style.cssText = "position:fixed;left:0;top:0;pointer-events:none;z-index:2";
+    fx.after(fixCv);
+    fixCtx = fixCv.getContext("2d");
     if (!sea || !initGL(sea)) {
       if (sea) sea.style.display = "none";
       gl = null;
@@ -765,6 +843,7 @@ gl_FragColor=vec4(col,1.);}`;
     }
     sizeCanvas();
     build();
+    measureDoc();
     running = true;
     draw(); // premier rendu SYNCHRONE : présent dès le premier frame peint
     if (isEmbedded) {
@@ -801,11 +880,13 @@ gl_FragColor=vec4(col,1.);}`;
         lastW = window.innerWidth;
         build();
       }
+      measureDoc();
       SIM.redraw();
     });
     document.addEventListener("floors-rendered", () => {
       if (!SIM.layout) return;
       if (window.RENDER && RENDER.layout) RENDER.layout(SIM);
+      measureDoc();
       SIM.redraw();
     });
     window.addEventListener("pageshow", (e) => {

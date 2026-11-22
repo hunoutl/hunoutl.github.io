@@ -404,7 +404,7 @@
   }
   function floorVisible(L, v, id) {
     const fl = L.byId[id];
-    return v.cam.flat && fl.top < v.scrollY + v.vh + 60 && fl.top + fl.h > v.scrollY - 60;
+    return v.cam.flat && fl.top < v.y1 + 60 && fl.top + fl.h > v.y0 - 60;
   }
 
   function drawTracers(ctx, SIM, count) {
@@ -477,8 +477,8 @@
     if (!v.cam.flat) return;
     const cs = SIM.layout.m ? 70 : 92;
     ctx.fillStyle = "rgba(57,255,136,.5)";
-    const j0 = Math.floor(v.scrollY / cs) - 1;
-    for (let j = j0; j * cs < v.scrollY + v.vh + cs; j++)
+    const j0 = Math.floor(v.y0 / cs) - 1;
+    for (let j = j0; j * cs < v.y1 + cs; j++)
       for (let i = 0; i * cs < v.W; i++) {
         const hh = SIM.hash3(j, i, 5150);
         if (hh % 5 < 2) continue;
@@ -505,8 +505,8 @@
     ctx.strokeStyle = "rgba(57,255,136,.22)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    const y0 = Math.ceil(v.scrollY / sp) * sp + sp / 2;
-    for (let y = y0; y < v.scrollY + v.vh; y += sp) {
+    const y0 = Math.ceil(v.y0 / sp) * sp + sp / 2;
+    for (let y = y0; y < v.y1; y += sp) {
       const sys = SIM.systems.find((s) => y >= s.top && y < s.bot);
       if (!sys) continue;
       for (let x = sp; x < v.W; x += sp) {
@@ -594,7 +594,7 @@
       ctx.fillStyle = "#d8ffe6";
       M.lava.forEach((pts, li) => {
         for (let k = 0; k < 3; k++) {
-          const u = (t * 0.1 + k / 3 + li * 0.21) % 1;
+          const u = (((t * 0.1 + k / 3 + li * 0.21) % 1) + 1) % 1;
           const f = u * (pts.length - 1);
           const i = Math.floor(f);
           const q = f - i;
@@ -680,6 +680,8 @@
     const e = cam.p;
     const yb = GEO.boatY(L, v.scrollY, v.vh) - (1 - e) * (1 - e) * (L.m ? 1500 : 1700);
     const docked = yb >= L.dock.y - 0.5;
+    // en route, le job suit l'écran : calque fixe (cf. SIM.screenCtx)
+    if (!docked) ctx = SIM.screenCtx(ctx);
     const xb = GEO.routeX(L, yb);
     if (!SIM.project(cam, xb, yb, pt)) return;
     const s = pt[2] * (L.m ? 1 : 1.5);
