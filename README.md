@@ -19,8 +19,22 @@ réglées sur l’horloge : on retrouve la même mer au même endroit.
 node tools/build.mjs      # → dist/index.html, un fichier unique tout-inline
 ```
 
-Aucune dépendance. La CI publie `dist/index.html`, `assets/`,
-`robots.txt` et `sitemap.xml` à chaque push sur `main`.
+Aucune dépendance. À chaque push sur `main`, la CI vérifie la syntaxe des
+scripts (`node --check`), construit le fichier unique et publie
+`dist/index.html`, `assets/`, `robots.txt` et `sitemap.xml`.
+
+## Code partagé avec [hunoutl.gitlab.io](https://hunoutl.gitlab.io/)
+
+Les fichiers listés dans `tools/shared.mjs` (moteur de bascule, géographie,
+simulation, build…) sont identiques octet pour octet dans les deux dépôts ;
+ce qui distingue les deux faces vit dans `scripts/site.js`, `content.js`,
+`render-*.js`, les styles et `index.html`.
+
+```sh
+node tools/shared.mjs check   # échoue si le dépôt frère (dossier voisin) diverge
+node tools/shared.mjs sync    # copie les fichiers partagés d'ici vers le frère
+git config core.hooksPath tools/hooks   # lance `check` à chaque commit
+```
 
 Pour tester la bascule en réseau local, servir les deux `dist/` sur deux
 origines distinctes et construire avec
