@@ -10,7 +10,16 @@
 // page des cartouches :
 //   PLAYWRIGHT=<chemin vers playwright/index.mjs> node tools/fit-floors.mjs ../hunoutl.github.io
 // (Chromium requis. PLAYWRIGHT vaut "playwright" par défaut.)
+//
+// Rapidité : les 4 combinaisons face × langue et, dans chacune, des
+// tranches contiguës de largeurs sont mesurées en parallèle, une page
+// (donc un processus de rendu) par tranche, JOBS pages à la fois (par
+// défaut : nombre de cœurs). WebGL est coupé : la mer (canvas #sea, hors
+// des étages) retombe sur son repli prévu (masquée), ce qui ne change
+// aucune mesure et évite le rendu logiciel swiftshader à chaque largeur,
+// qui coûtait plus que tout le reste.
 import { execFileSync } from "node:child_process";
+import { availableParallelism } from "node:os";
 import { writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -24,6 +33,7 @@ if (!sibling) {
 const W0 = 320, W1 = 2560, STEP = 10;
 const MARGIN = 32; // air sous le bas du dernier texte (px)
 const QUANT = 8; // marges arrondies au multiple supérieur (table stable)
+const JOBS = Math.max(1, +process.env.JOBS || availableParallelism());
 
 const pw = process.env.PLAYWRIGHT || "playwright";
 const { chromium } = await import(pw.startsWith("/") ? pathToFileURL(pw).href : pw);
@@ -78,29 +88,45 @@ function measure() {
   return out;
 }
 
-const b = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
+const b = await chromium.launch({ args: ["--disable-gpu", "--disable-webgl"] });
+const widths = [];
+for (let W = W0; W <= W1; W += STEP) widths.push(W);
+// Tranches : assez pour occuper JOBS pages, pas trop (chaque tranche
+// recharge la page). Une page chargée directement à une largeur donne la
+// même mise en page qu'une page redimensionnée jusqu'à elle.
+const combos = repos.flatMap((repo) => ["fr", "en"].map((lang) => ({ repo, lang, left: 0 })));
+const perCombo = Math.max(1, Math.ceil((JOBS * 2) / combos.length));
+const size = Math.ceil(widths.length / perCombo);
+const tasks = [];
+for (const c of combos)
+  for (let k0 = 0; k0 < widths.length; k0 += size, c.left++) tasks.push({ c, k0, k1: Math.min(widths.length, k0 + size) });
+
 const need = {}; // id → tableau des marges (max sur faces et langues)
-for (const repo of repos) {
-  for (const lang of ["fr", "en"]) {
-    // animations réduites : pas d'iframe miroir ni de boucle d'animation
-    const ctx = await b.newContext({ viewport: { width: W0, height: 900 }, reducedMotion: "reduce" });
-    await ctx.addInitScript((l) => localStorage.setItem("siteLang", l), lang);
-    const p = await ctx.newPage();
-    await p.goto(pathToFileURL(join(repo, "dist/index.html")).href);
-    await p.waitForTimeout(300);
-    for (let W = W0, k = 0; W <= W1; W += STEP, k++) {
-      await p.setViewportSize({ width: W, height: 900 });
-      await p.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
-      const m = await p.evaluate(measure);
-      for (const [id, v] of Object.entries(m)) {
-        (need[id] ||= [])[k] = Math.max(need[id][k] || 0, v);
-      }
+async function run({ c, k0, k1 }) {
+  // animations réduites : pas d'iframe miroir ni de boucle d'animation
+  const ctx = await b.newContext({ viewport: { width: widths[k0], height: 900 }, reducedMotion: "reduce" });
+  await ctx.addInitScript((l) => localStorage.setItem("siteLang", l), c.lang);
+  const p = await ctx.newPage();
+  await p.goto(pathToFileURL(join(c.repo, "dist/index.html")).href);
+  await p.waitForTimeout(300);
+  for (let k = k0; k < k1; k++) {
+    if (k > k0) await p.setViewportSize({ width: widths[k], height: 900 });
+    await p.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
+    const m = await p.evaluate(measure);
+    for (const [id, v] of Object.entries(m)) {
+      (need[id] ||= [])[k] = Math.max(need[id][k] || 0, v);
     }
-    console.log(`${repo.split("/").pop()} ${lang} : mesuré`);
-    await ctx.close();
   }
+  await ctx.close();
+  if (!--c.left) console.log(`${c.repo.split("/").pop()} ${c.lang} : mesuré`);
 }
+const queue = tasks.slice();
+await Promise.all(Array.from({ length: Math.min(JOBS, tasks.length) }, async () => {
+  while (queue.length) await run(queue.shift());
+}));
 await b.close();
+// Pas de trou dans les tableaux (une clé absente à une largeur vaut 0).
+for (const a of Object.values(need)) for (let k = 0; k < widths.length; k++) a[k] ||= 0;
 
 const d = {}, sh = {};
 for (const [id, a] of Object.entries(need)) {
